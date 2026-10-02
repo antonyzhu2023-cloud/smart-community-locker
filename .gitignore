@@ -1,0 +1,52 @@
+# Secrets — never commit these
+.env
+app/lib/firebase_options.dart
+app/android/app/google-services.json
+app/ios/Runner/GoogleService-Info.plist
+functions/.env
+functions/serviceAccountKey.json
+*.keystore
+*.jks
+
+# Flutter / Dart
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/build/
+app/.packages
+app/pubspec.lock
+app/coverage/
+**/*.g.dart
+**/*.freezed.dart
+
+# Android
+app/android/.gradle/
+app/android/local.properties
+app/android/app/debug/
+app/android/app/profile/
+app/android/app/release/
+app/android/.kotlin/
+
+# iOS (not built in this project, but keep the target clean)
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/Flutter.framework
+app/ios/Flutter/Flutter.podspec
+
+# Cloud Functions
+functions/node_modules/
+functions/lib/
+functions/*.log
+.firebase/
+
+# Python simulator
+simulator/__pycache__/
+simulator/.venv/
+simulator/venv/
+
+# Editors and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

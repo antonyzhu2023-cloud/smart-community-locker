@@ -1,0 +1,39 @@
+# Static analysis configuration.
+#
+# One of the three industry evaluation processes applied in report Section 4 is
+# static analysis plus the CI coverage gate. The rules below are stricter than
+# the Flutter default so that the analyser catches real defect classes, not only
+# style. Every rule here is enforced on every push by the CI workflow.
+
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    # An unawaited Future in this codebase almost always means a repository call
+    # whose result is dropped. Treat it as an error, not a hint.
+    unawaited_futures: error
+    # A dead null check usually means a nullability assumption has drifted.
+    unnecessary_null_comparison: error
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "lib/firebase_options.dart"
+    - build/**
+    - android/**
+    - ios/**
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_print
+    - avoid_slow_async_io
+    - cancel_subscriptions
+    - close_sinks
+    - prefer_final_locals
+    - prefer_single_quotes
+    - throw_in_finally
+    - unawaited_futures
+    - use_build_context_synchronously

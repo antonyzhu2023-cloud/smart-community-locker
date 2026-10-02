@@ -1,0 +1,27 @@
+# Line endings are normalised to LF in the repository.
+#
+# Development happens on Windows but CI runs on Linux, and the pipeline checks
+# formatting with `dart format --set-exit-if-changed`. Without this file the
+# checked-out line endings differ between the two and the formatting check can
+# fail on CI for code that is correctly formatted locally.
+
+* text=auto eol=lf
+
+*.dart   text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.json   text eol=lf
+*.md     text eol=lf
+*.py     text eol=lf
+*.ts     text eol=lf
+*.gradle text eol=lf
+
+*.bat    text eol=crlf
+*.ps1    text eol=crlf
+
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.pdf    binary
+*.jar    binary
+*.keystore binary

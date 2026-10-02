@@ -1,0 +1,91 @@
+# Continuous integration for the Smart Community Locker System.
+#
+# Runs on every push and pull request. Getting this green BEFORE any feature
+# exists is deliberate: the run history is the evidence for report Section 3.2
+# that CI was part of the process, not bolted on at the end.
+#
+# The Cloud Functions job is added in Sprint 2, when functions/ exists.
+
+name: CI
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  app:
+    name: Flutter app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests with coverage
+        run: flutter test --coverage
+
+      # QR6: at least 70% line coverage on the layers that hold the logic.
+      # Views are excluded on purpose. They are thin by design and are checked by
+      # widget tests; measuring them would flatter the number without testing
+      # anything. lcov.info is parsed directly rather than with the lcov tool,
+      # because lcov 2.x on the runner rejects the file in strict mode.
+      - name: Coverage gate (viewmodels + repositories >= 70%)
+        run: |
+          awk '
+            /^SF:/ {
+              # Both separators: lcov.info uses backslashes when generated on
+              # Windows and forward slashes on the Linux runner, and the gate
+              # has to give the same answer in both places.
+              keep = ($0 ~ /lib[\/\\](viewmodels|repositories)[\/\\]/)
+              if (keep) file = substr($0, 4)
+              next
+            }
+            /^DA:/ {
+              if (!keep) next
+              split(substr($0, 4), a, ",")
+              total++
+              fileTotal[file]++
+              if (a[2] + 0 > 0) { hit++; fileHit[file]++ }
+              next
+            }
+            END {
+              if (total == 0) {
+                print "FAIL: no lines found under lib/viewmodels or lib/repositories"
+                exit 1
+              }
+              for (f in fileTotal) {
+                printf "  %6.2f%%  %s\n", fileHit[f] * 100 / fileTotal[f], f
+              }
+              pct = hit * 100 / total
+              printf "Logic-layer line coverage: %.2f%% (%d/%d)\n", pct, hit, total
+              if (pct < 70) {
+                print "FAIL: below the 70% gate required by QR6"
+                exit 1
+              }
+              print "PASS: coverage gate met"
+            }
+          ' coverage/lcov.info
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: app/coverage/
