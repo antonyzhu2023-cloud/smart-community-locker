@@ -95,6 +95,16 @@ Two more faults found after the screenshot above, both worth recording because o
    for why the usability evaluation in Section 4 is not optional: automated tests check
    what was specified, and this was never specified.
 
+**Sprint 0 closed.** First push, CI run #1 green in 1m56s: formatting check, static analysis,
+77 tests, coverage gate. Nothing application-facing was built, but the pipeline that will
+judge everything after this is now in place and has been proved to run.
+
+One last environment fault before the push, worth one line because it is the same shape as
+the other four: `git` was installed and working but had no identity configured, and
+`adb` was installed and working but not on `PATH`. In both cases the tool above it
+(`flutter doctor`, the GitHub docs) reported everything healthy. Five of the six problems in
+this sprint were a working component that a neighbouring component could not reach.
+
 - _(continue here)_
 
 ---
