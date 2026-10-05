@@ -111,7 +111,42 @@ this sprint were a working component that a neighbouring component could not rea
 
 ## Sprint 1 — FR1 auth, FR2 discovery, FR3 booking
 
-_(entries)_
+### 2026-10-05 — FR1 against an interface, before Firebase exists
+
+Wrote the whole auth feature without a Firebase project: `AuthRepository` interface,
+`InMemoryAuthRepository` with a seeded community roll of four membership codes,
+`AuthViewModel`, a combined sign-in / register screen, a membership verification screen,
+and `RootView` to choose between them. 123 tests pass, `flutter analyze` clean.
+
+Deciding to build against the interface first was the right call for a reason that was not
+obvious when planning. It is not only that Firebase setup can happen in parallel. It is
+that writing the fake forced the auth *rules* to be stated explicitly — minimum password
+length, one claim per membership code, case-insensitive email — before any of them could be
+hidden inside a service's default behaviour. When the Firebase implementation arrives, those
+same tests become the specification it has to satisfy.
+
+Two decisions worth reporting:
+
+1. **E1 was made structural.** Milestone 1 wrote the rule as "an unverified account cannot
+   book", which invites an `if` on the booking button. Instead `RootView` selects the screen
+   from auth state and the three screens have no navigation between them, so an unverified
+   account cannot reach the locker list at all. The tests in `root_view_test.dart` assert on
+   reachability rather than on error messages. A rule that cannot be routed around is worth
+   more than a rule that is merely checked.
+2. **A wrong membership code at registration refuses the whole registration, but omitting
+   the code does not.** Mistyping one character should not permanently cost someone their
+   own email address; someone who leaves it blank knows they do not have a code yet. The two
+   cases look similar in a requirements document and are not similar to a user.
+
+Also found that the `AuthViewModel` first written updated its user only through the
+repository's auth-state stream. Stream delivery is asynchronous, so any caller that awaited
+a sign-in and then read `isSignedIn` was depending on microtask ordering. It happened to
+pass. Changed to read the session back synchronously once the call returns, with the
+subscription kept for changes originating elsewhere. Timing bugs that pass are the ones
+worth hunting; this one would have surfaced only under a slower backend, which is exactly
+what Firebase will be.
+
+- _(continue here)_
 
 ---
 

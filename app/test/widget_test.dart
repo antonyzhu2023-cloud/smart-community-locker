@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:scls/models/compartment.dart';
 import 'package:scls/models/locker_station.dart';
+import 'package:scls/repositories/in_memory_auth_repository.dart';
 import 'package:scls/repositories/locker_repository.dart';
+import 'package:scls/viewmodels/auth_view_model.dart';
 import 'package:scls/viewmodels/station_list_view_model.dart';
 import 'package:scls/views/station_list_view.dart';
 
@@ -16,10 +18,18 @@ import 'fakes/fake_locker_repository.dart';
 /// that the three screen states render, and that the filter chips reach the
 /// ViewModel. It is the widget-level safety net, not the main test effort.
 void main() {
+  // The station list carries a sign-out button, so it needs an AuthViewModel
+  // even though none of these tests exercise auth.
   Widget wrap(FakeLockerRepository repo) {
+    final auth = InMemoryAuthRepository();
+    addTearDown(auth.dispose);
+
     return MultiProvider(
       providers: [
         Provider<LockerRepository>.value(value: repo),
+        ChangeNotifierProvider<AuthViewModel>(
+          create: (_) => AuthViewModel(auth),
+        ),
         ChangeNotifierProvider<StationListViewModel>(
           create: (_) => StationListViewModel(repo),
         ),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../models/compartment.dart';
 import '../models/locker_station.dart';
+import '../viewmodels/auth_view_model.dart';
 import '../viewmodels/station_list_view_model.dart';
 
 /// Shows the stations a resident can book from.
@@ -44,6 +45,14 @@ class _StationListViewState extends State<StationListView> {
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
             onPressed: vm.isLoading ? null : vm.load,
+          ),
+          // Sign-out lives here rather than on a settings screen the project
+          // does not have. It reads the auth ViewModel directly because there
+          // is nothing to decide: the button either signs out or it does not.
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Sign out',
+            onPressed: () => context.read<AuthViewModel>().signOut(),
           ),
         ],
       ),
