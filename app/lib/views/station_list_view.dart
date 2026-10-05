@@ -7,6 +7,8 @@ import '../models/compartment.dart';
 import '../models/locker_station.dart';
 import '../viewmodels/auth_view_model.dart';
 import '../viewmodels/station_list_view_model.dart';
+import 'booking_view.dart';
+import 'my_bookings_view.dart';
 
 /// Shows the stations a resident can book from.
 ///
@@ -41,6 +43,11 @@ class _StationListViewState extends State<StationListView> {
       appBar: AppBar(
         title: const Text('Nearby lockers'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'My bookings',
+            onPressed: () => Navigator.of(context).push(MyBookingsView.route()),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
@@ -176,7 +183,17 @@ class _StationTile extends StatelessWidget {
         ),
         trailing: bookable ? const Icon(Icons.chevron_right) : null,
         enabled: bookable,
-        onTap: bookable ? () {} : null, // Booking screen arrives in Sprint 1.
+        onTap: bookable
+            ? () async {
+                await Navigator.of(context).push(BookingView.route(station.id));
+                // A booking made on that screen changes which compartments are
+                // free, so the list is reloaded on the way back rather than
+                // showing a count that is already wrong.
+                if (context.mounted) {
+                  await context.read<StationListViewModel>().load();
+                }
+              }
+            : null,
       ),
     );
   }

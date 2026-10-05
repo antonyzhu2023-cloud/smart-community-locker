@@ -41,44 +41,75 @@ jobs:
       - name: Run tests with coverage
         run: flutter test --coverage
 
-      # QR6: at least 70% line coverage on the layers that hold the logic.
-      # Views are excluded on purpose. They are thin by design and are checked by
-      # widget tests; measuring them would flatter the number without testing
-      # anything. lcov.info is parsed directly rather than with the lcov tool,
-      # because lcov 2.x on the runner rejects the file in strict mode.
-      - name: Coverage gate (viewmodels + repositories >= 70%)
+      # QR6 asks for at least 70% line coverage on ViewModel and repository code.
+      #
+      # The gate measures the whole of lib/, not a list of directories. It used to
+      # name lib/viewmodels and lib/repositories explicitly and skip lib/views, on
+      # the grounds that views were thin. That was true when it was written and
+      # stopped being true once the views grew a confirmation dialog, and nothing
+      # reported the change: a gate with a hand-maintained scope goes stale in
+      # silence, and any directory added later would be unmeasured by default.
+      # Measuring everything removes that failure mode. The QR6 figure is still
+      # reported on its own, and still gated on its own, so the requirement can be
+      # evidenced directly.
+      #
+      # lcov.info is parsed here rather than with the lcov tool, because lcov 2.x
+      # on the runner rejects the generated file in strict mode.
+      - name: Coverage gate (lib >= 70%, QR6 layers >= 70%)
         run: |
           awk '
             /^SF:/ {
-              # Both separators: lcov.info uses backslashes when generated on
-              # Windows and forward slashes on the Linux runner, and the gate
-              # has to give the same answer in both places.
-              keep = ($0 ~ /lib[\/\\](viewmodels|repositories)[\/\\]/)
-              if (keep) file = substr($0, 4)
+              file = substr($0, 4)
+              # lcov.info uses backslashes when generated on Windows and forward
+              # slashes on the Linux runner. Normalise so the gate gives the same
+              # answer in both places.
+              gsub(/\\/, "/", file)
               next
             }
             /^DA:/ {
-              if (!keep) next
               split(substr($0, 4), a, ",")
-              total++
+              covered = (a[2] + 0 > 0)
+
               fileTotal[file]++
-              if (a[2] + 0 > 0) { hit++; fileHit[file]++ }
+              if (covered) fileHit[file]++
+
+              allTotal++
+              if (covered) allHit++
+
+              if (file ~ /lib\/(viewmodels|repositories)\//) {
+                qrTotal++
+                if (covered) qrHit++
+              }
               next
             }
             END {
-              if (total == 0) {
-                print "FAIL: no lines found under lib/viewmodels or lib/repositories"
+              if (allTotal == 0) {
+                print "FAIL: no coverage data found under lib/"
                 exit 1
               }
+
+              # Unsorted on purpose: asorti is a gawk extension and the runner
+              # does not guarantee gawk. Order does not matter in a log.
               for (f in fileTotal) {
-                printf "  %6.2f%%  %s\n", fileHit[f] * 100 / fileTotal[f], f
+                printf "  %6.2f%%  %4d/%-4d  %s\n",
+                       fileHit[f] * 100 / fileTotal[f], fileHit[f], fileTotal[f], f
               }
-              pct = hit * 100 / total
-              printf "Logic-layer line coverage: %.2f%% (%d/%d)\n", pct, hit, total
-              if (pct < 70) {
-                print "FAIL: below the 70% gate required by QR6"
-                exit 1
+
+              all = allHit * 100 / allTotal
+              qr  = qrTotal ? qrHit * 100 / qrTotal : 0
+              printf "\n  whole of lib/                  : %.2f%% (%d/%d)\n", all, allHit, allTotal
+              printf "  QR6 viewmodels + repositories  : %.2f%% (%d/%d)\n", qr, qrHit, qrTotal
+
+              failed = 0
+              if (all < 70) { print "FAIL: lib/ is below the 70% gate"; failed = 1 }
+              if (qrTotal == 0) {
+                print "FAIL: no lines found under lib/viewmodels or lib/repositories"
+                failed = 1
+              } else if (qr < 70) {
+                print "FAIL: the QR6 layers are below the 70% gate"
+                failed = 1
               }
+              if (failed) exit 1
               print "PASS: coverage gate met"
             }
           ' coverage/lcov.info

@@ -146,6 +146,30 @@ subscription kept for changes originating elsewhere. Timing bugs that pass are t
 worth hunting; this one would have surfaced only under a slower backend, which is exactly
 what Firebase will be.
 
+### 2026-10-06 — FR3, and a gap the coverage gate could not see
+
+Booking, cancelling and extending. `BookingRepository` with an in-memory
+implementation, two ViewModels, three screens. The concurrency rule from evaluation
+criterion E3 is enforced by keeping the check-and-hold free of `await`, and tested by
+firing ten bookings at one compartment and asserting exactly one wins.
+
+The thing worth recording is not the feature. It is that the screens were written with no
+widget tests at all, and nothing caught it. `flutter test` reported the same 183 passing
+cases as before the screens existed, because a count of passing tests says nothing about
+what was never written. `flutter analyze` was clean. The coverage gate was green.
+
+The gate was green because it measures `lib/viewmodels/` and `lib/repositories/` only.
+Excluding `lib/views/` was a reasonable decision in Sprint 0, when the views held nothing
+but layout and measuring them would have inflated the number without testing anything.
+By this sprint the views had grown a cancel-confirmation dialog, whose two branches are
+real logic, and the kind of logic that looks correct from the outside when it is wired the
+wrong way round. The exclusion had quietly turned from a sensible scope into a blind spot,
+and a gate that reports a percentage cannot tell you that the thing it is not measuring has
+changed.
+
+Caught by the developer asking why the test count had not moved, not by any tool. Twenty-five
+widget tests added afterwards, including one that asserts "Keep it" leaves the booking alone.
+
 - _(continue here)_
 
 ---
