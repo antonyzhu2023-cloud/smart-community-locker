@@ -38,6 +38,15 @@ abstract class AuthRepository {
   /// Verifies an existing account after the fact. Used when someone registered
   /// without a code.
   Future<AppUser> verifyMembership(String membershipCode);
+
+  /// Finds a verified community member by email, for handing a booking over
+  /// (FR7).
+  ///
+  /// Returns null when there is no such account, and also when the account
+  /// exists but is not a verified member. The caller is told the same thing
+  /// either way on purpose: an app that says "that address exists but is not
+  /// verified" lets anyone test whether a given person lives in the building.
+  Future<AppUser?> findMember(String email);
 }
 
 /// Why an auth operation failed, in terms the UI can act on.

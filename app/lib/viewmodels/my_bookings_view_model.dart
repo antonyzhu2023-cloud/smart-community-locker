@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/access_token.dart';
 import '../models/reservation.dart';
+import '../repositories/access_token_repository.dart';
 import '../repositories/booking_repository.dart';
 
 /// The user's own bookings, with cancel and extend (FR3).
@@ -11,12 +13,19 @@ import '../repositories/booking_repository.dart';
 /// have produced a ViewModel with two unrelated halves and twice as many states
 /// to reason about in tests.
 class MyBookingsViewModel extends ChangeNotifier {
-  MyBookingsViewModel(this._repository, this._userId);
+  MyBookingsViewModel(this._repository, this._userId, {this.tokens});
 
   final BookingRepository _repository;
   final String _userId;
 
+  /// Optional. When given, the list also shows bookings somebody else has
+  /// handed to this user (FR7). Optional because most tests of this class have
+  /// nothing to do with hand-overs and should not have to build an access
+  /// backend to run.
+  final AccessTokenRepository? tokens;
+
   List<Reservation> _bookings = const [];
+  List<SharedBooking> _shared = const [];
   bool _loading = false;
   String? _error;
 
@@ -28,7 +37,13 @@ class MyBookingsViewModel extends ChangeNotifier {
   bool get isLoading => _loading;
   String? get error => _error;
   bool get hasError => _error != null;
-  bool get isEmpty => !_loading && _error == null && _bookings.isEmpty;
+
+  /// Bookings handed to this user by a neighbour.
+  List<SharedBooking> get sharedWithMe => _shared;
+  bool get hasShared => _shared.isNotEmpty;
+
+  bool get isEmpty =>
+      !_loading && _error == null && _bookings.isEmpty && _shared.isEmpty;
 
   bool isWorkingOn(String reservationId) => _working.contains(reservationId);
 
@@ -46,16 +61,41 @@ class MyBookingsViewModel extends ChangeNotifier {
 
     try {
       _bookings = await _repository.fetchBookings(_userId);
+      _shared = await _loadShared();
     } on BookingException catch (e) {
       _error = e.message;
       _bookings = const [];
+      _shared = const [];
     } catch (_) {
       _error = 'Could not load your bookings. Check your connection.';
       _bookings = const [];
+      _shared = const [];
     } finally {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  /// Bookings somebody else has given this user a code for (FR7).
+  ///
+  /// Each one is looked up by id because it is not theirs. The server allows
+  /// the read for the same reason it will let them open the door: they hold a
+  /// token for it.
+  Future<List<SharedBooking>> _loadShared() async {
+    final repository = tokens;
+    if (repository == null) return const [];
+
+    final delegations = await repository.delegationsTo(_userId);
+    final shared = <SharedBooking>[];
+
+    for (final token in delegations) {
+      final booking = await _repository.fetchBooking(token.reservationId);
+      // A booking that has gone, or that the owner has since cancelled, is
+      // dropped rather than shown as something the neighbour can open.
+      if (booking == null || booking.isFinished) continue;
+      shared.add(SharedBooking(booking: booking, token: token));
+    }
+    return List.unmodifiable(shared);
   }
 
   /// Replaces one booking in the list without reloading the rest.
@@ -117,4 +157,19 @@ class MyBookingsViewModel extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+}
+
+/// A booking a neighbour has given this user a code for, with that code.
+///
+/// The two travel together because neither is any use on its own. The booking
+/// says which locker and until when. The token is the only reason this user is
+/// allowed to see it.
+class SharedBooking {
+  const SharedBooking({required this.booking, required this.token});
+
+  final Reservation booking;
+  final AccessToken token;
+
+  @override
+  String toString() => 'SharedBooking(${booking.compartmentId}, ${token.id})';
 }

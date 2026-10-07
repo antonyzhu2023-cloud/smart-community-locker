@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:scls/models/compartment.dart';
 import 'package:scls/models/locker_station.dart';
+import 'package:scls/repositories/access_token_repository.dart';
 import 'package:scls/repositories/booking_repository.dart';
+import 'package:scls/repositories/in_memory_access_backend.dart';
 import 'package:scls/repositories/in_memory_auth_repository.dart';
 import 'package:scls/repositories/in_memory_booking_repository.dart';
 import 'package:scls/repositories/in_memory_locker_repository.dart';
@@ -21,6 +23,7 @@ void main() {
   late InMemoryLockerRepository lockers;
   late InMemoryBookingRepository bookings;
   late InMemoryAuthRepository auth;
+  late InMemoryAccessBackend backend;
   late AuthViewModel authVm;
 
   setUp(() async {
@@ -49,6 +52,7 @@ void main() {
     );
     bookings = InMemoryBookingRepository(lockers);
     auth = InMemoryAuthRepository();
+    backend = InMemoryAccessBackend(lockers: lockers, bookings: bookings);
     authVm = AuthViewModel(auth);
     await authVm.register(
       email: 'resident@example.com',
@@ -58,9 +62,10 @@ void main() {
     );
   });
 
-  tearDown(() {
+  tearDown(() async {
     authVm.dispose();
     auth.dispose();
+    await backend.dispose();
   });
 
   Future<void> open(WidgetTester tester) async {
@@ -69,6 +74,7 @@ void main() {
         providers: [
           Provider<LockerRepository>.value(value: lockers),
           Provider<BookingRepository>.value(value: bookings),
+          Provider<AccessTokenRepository>.value(value: backend),
           ChangeNotifierProvider<AuthViewModel>.value(value: authVm),
           ChangeNotifierProvider<StationListViewModel>(
             create: (_) => StationListViewModel(lockers),

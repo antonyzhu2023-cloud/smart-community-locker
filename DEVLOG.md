@@ -170,6 +170,35 @@ changed.
 Caught by the developer asking why the test count had not moved, not by any tool. Twenty-five
 widget tests added afterwards, including one that asserts "Keep it" leaves the booking alone.
 
+The gate was then changed to measure the whole of `lib/` rather than a named list of
+directories, because the fault was not that views went unmeasured. The fault was that the
+scope was hand-maintained, so it could go stale without anything reporting it, and any
+directory added later would be unmeasured by default. Measuring everything removes that
+class of failure. The QR6 layers are still reported and gated separately so the requirement
+can be evidenced directly. Measured figures: whole of `lib/` 94.10%, QR6 layers 94.79%,
+`lib/views/` 95.34% — the views turned out to be the best-covered layer in the project, so
+widening the gate relaxed nothing. The gate was also run against a doctored `lcov.info` with
+every line marked uncovered, to confirm it actually fails; the earlier path-separator bug
+existed because the gate itself had never been tested.
+
+### 2026-10-06 — two defects found by reading the demo screenshots
+
+Both were in the screenshots taken for the report, and neither was reachable by the tests
+that existed:
+
+1. The stay options read "2 hours / 1 days / 3 days".
+2. A cancelled booking read "Ended Tue 6 Oct, 02:10" — a time it never reached, because it
+   was given up hours earlier. The data was correct and the sentence was not. The widget
+   tests asserted that the state became `cancelled` and that the row moved to the Finished
+   group, and both of those were already right, so nothing failed.
+
+This is the second time in two days that looking at the running app found something the
+suite could not. It is a concrete argument for the heuristic evaluation planned in Section
+4 rather than a rhetorical one: automated tests check what somebody thought to specify, and
+nobody specifies the wording of a sentence until they read it. Regression tests for both
+were added afterwards, which is the right order — the test documents the defect, it does
+not discover it.
+
 - _(continue here)_
 
 ---

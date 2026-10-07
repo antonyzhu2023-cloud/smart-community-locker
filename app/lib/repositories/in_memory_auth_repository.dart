@@ -188,6 +188,17 @@ class InMemoryAuthRepository implements AuthRepository {
     return verified;
   }
 
+  @override
+  Future<AppUser?> findMember(String email) async {
+    await _wait();
+    final account = _accounts[email.trim().toLowerCase()];
+    if (account == null) return null;
+    // An unverified account is reported as not found. Saying "exists but not
+    // verified" would let anyone test whether a given person lives here.
+    if (!account.user.isEligible) return null;
+    return account.user;
+  }
+
   /// Closes the auth state stream. Called by the provider when the app shuts
   /// down, and by tests in tearDown.
   void dispose() {

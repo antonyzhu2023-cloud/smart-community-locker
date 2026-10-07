@@ -29,6 +29,14 @@ abstract class BookingRepository {
   /// Bookings belonging to one user, newest first.
   Future<List<Reservation>> fetchBookings(String userId);
 
+  /// One booking by id.
+  ///
+  /// Needed by FR7: somebody holding a handed-over token has to be shown what
+  /// they have been given, and that booking is not theirs. The server allows
+  /// the read because they hold a token for it, which is the same reason it
+  /// will let them open the door.
+  Future<Reservation?> fetchBooking(String reservationId);
+
   Future<Reservation> cancel(String reservationId);
 
   /// Pushes the end time out. Refused once the booking is finished.

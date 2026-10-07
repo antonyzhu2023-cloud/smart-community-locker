@@ -138,12 +138,31 @@ class InMemoryBookingRepository implements BookingRepository {
     return reservation;
   }
 
+  // ---------------------------------------------------------------------
+  // Synchronous access used by InMemoryAccessBackend, which stands in for the
+  // server. Not on the BookingRepository interface: the app has no business
+  // reading somebody else's booking by id, and only the server ever needs to.
+  // ---------------------------------------------------------------------
+
+  Reservation? reservationById(String id) => _bookings[id];
+
+  /// Replaces a booking. Used when an open moves it from confirmed to active.
+  void replace(Reservation reservation) {
+    _bookings[reservation.id] = reservation;
+  }
+
   @override
   Future<List<Reservation>> fetchBookings(String userId) async {
     await _wait();
     final mine = _bookings.values.where((r) => r.userId == userId).toList()
       ..sort((a, b) => b.startTime.compareTo(a.startTime));
     return List.unmodifiable(mine);
+  }
+
+  @override
+  Future<Reservation?> fetchBooking(String reservationId) async {
+    await _wait();
+    return _bookings[reservationId];
   }
 
   @override

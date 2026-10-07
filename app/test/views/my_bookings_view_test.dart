@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:scls/models/compartment.dart';
 import 'package:scls/models/locker_station.dart';
 import 'package:scls/models/reservation.dart';
+import 'package:scls/repositories/access_token_repository.dart';
 import 'package:scls/repositories/booking_repository.dart';
+import 'package:scls/repositories/in_memory_access_backend.dart';
 import 'package:scls/repositories/in_memory_auth_repository.dart';
 import 'package:scls/repositories/in_memory_booking_repository.dart';
 import 'package:scls/repositories/in_memory_locker_repository.dart';
@@ -15,6 +17,7 @@ void main() {
   late InMemoryLockerRepository lockers;
   late InMemoryBookingRepository bookings;
   late InMemoryAuthRepository auth;
+  late InMemoryAccessBackend backend;
   late AuthViewModel authVm;
 
   setUp(() async {
@@ -43,6 +46,7 @@ void main() {
     );
     bookings = InMemoryBookingRepository(lockers);
     auth = InMemoryAuthRepository();
+    backend = InMemoryAccessBackend(lockers: lockers, bookings: bookings);
     authVm = AuthViewModel(auth);
     await authVm.register(
       email: 'resident@example.com',
@@ -52,9 +56,10 @@ void main() {
     );
   });
 
-  tearDown(() {
+  tearDown(() async {
     authVm.dispose();
     auth.dispose();
+    await backend.dispose();
   });
 
   Future<Reservation> book(String compartmentId) => bookings.book(
@@ -70,6 +75,7 @@ void main() {
       MultiProvider(
         providers: [
           Provider<BookingRepository>.value(value: bookings),
+          Provider<AccessTokenRepository>.value(value: backend),
           ChangeNotifierProvider<AuthViewModel>.value(value: authVm),
         ],
         child: MaterialApp(
@@ -210,6 +216,32 @@ void main() {
 
       final after = await bookings.fetchBookings(authVm.user!.id);
       expect(after.single.endTime, booking.endTime);
+    });
+  });
+
+  group('wording', () {
+    testWidgets('a live booking is described by when it runs out', (
+      tester,
+    ) async {
+      await book('C1');
+      await open(tester);
+
+      expect(find.textContaining('Until '), findsOneWidget);
+    });
+
+    testWidgets('a cancelled booking does not claim to have ended', (
+      tester,
+    ) async {
+      // Found by looking at a demo screenshot: the row read "Ended <time>" for
+      // a booking that was cancelled hours before that time. The data was
+      // right and the sentence was not. No assertion on state or grouping can
+      // catch this, because both were already correct.
+      final booking = await book('C1');
+      await bookings.cancel(booking.id);
+      await open(tester);
+
+      expect(find.textContaining('Ended'), findsNothing);
+      expect(find.textContaining('Was booked until'), findsOneWidget);
     });
   });
 

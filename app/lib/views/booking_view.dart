@@ -168,8 +168,11 @@ String _sizeLabel(SizeClass size) => switch (size) {
   SizeClass.large => 'Large',
 };
 
-String _stayLabel(Duration stay) =>
-    stay.inHours < 24 ? '${stay.inHours} hours' : '${stay.inHours ~/ 24} days';
+String _stayLabel(Duration stay) {
+  if (stay.inHours < 24) return '${stay.inHours} hours';
+  final days = stay.inHours ~/ 24;
+  return days == 1 ? '1 day' : '$days days';
+}
 
 String purposeLabel(ReservationPurpose purpose) => switch (purpose) {
   ReservationPurpose.parcel => 'Parcel',

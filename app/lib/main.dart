@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'repositories/access_token_repository.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/booking_repository.dart';
+import 'repositories/in_memory_access_backend.dart';
 import 'repositories/in_memory_auth_repository.dart';
 import 'repositories/in_memory_booking_repository.dart';
 import 'repositories/in_memory_locker_repository.dart';
+import 'repositories/locker_command_gateway.dart';
 import 'repositories/locker_repository.dart';
 import 'viewmodels/auth_view_model.dart';
 import 'viewmodels/station_list_view_model.dart';
@@ -40,6 +43,7 @@ class _SclsAppState extends State<SclsApp> {
   late final InMemoryLockerRepository _lockers;
   late final InMemoryAuthRepository _auth;
   late final InMemoryBookingRepository _bookings;
+  late final InMemoryAccessBackend _access;
 
   @override
   void initState() {
@@ -56,11 +60,29 @@ class _SclsAppState extends State<SclsApp> {
         return user != null && user.id == userId && user.isEligible;
       },
     );
+    // Issuing credentials and deciding whether one opens a door are both the
+    // server's job, so one object implements both interfaces. The app still
+    // sees two, because the screens have no reason to know they are the same
+    // thing, and the Firebase build will split them again.
+    _access = InMemoryAccessBackend(
+      lockers: _lockers,
+      bookings: _bookings,
+      // A cabinet does not answer in the same instant it is asked. Without this
+      // the "waiting for the locker" state would never be visible, and FR5
+      // exists because that state is real.
+      //
+      // Three seconds is the slow end of plausible rather than the typical
+      // case: an MQTT round trip plus a solenoid plus a reed switch is usually
+      // well under a second. It is set this high so the intermediate state can
+      // be read and captured. Say so wherever a screenshot of it is used.
+      doorReportDelay: const Duration(seconds: 3),
+    );
   }
 
   @override
   void dispose() {
     _auth.dispose();
+    _access.dispose();
     super.dispose();
   }
 
@@ -71,6 +93,8 @@ class _SclsAppState extends State<SclsApp> {
         Provider<LockerRepository>.value(value: _lockers),
         Provider<AuthRepository>.value(value: _auth),
         Provider<BookingRepository>.value(value: _bookings),
+        Provider<AccessTokenRepository>.value(value: _access),
+        Provider<LockerCommandGateway>.value(value: _access),
         ChangeNotifierProvider<AuthViewModel>(
           create: (context) => AuthViewModel(context.read<AuthRepository>()),
         ),

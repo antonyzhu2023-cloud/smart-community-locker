@@ -42,6 +42,25 @@ dependencies:
 
   intl: ^0.19.0
 
+  # HMAC-SHA256 for signing access tokens (FR4). The signature is produced and
+  # checked server-side; this dependency is here because the in-memory gateway
+  # stands in for that server during development.
+  crypto: ^3.0.6
+
+  # Renders the signed payload as the QR code the cabinet scans (FR4).
+  qr_flutter: ^4.1.0
+
+  # Firebase. Only Auth, Firestore and the Functions client are used.
+  #
+  # The Cloud Functions themselves run in the Firebase Local Emulator Suite
+  # rather than deployed, because deployment requires the Blaze plan and this
+  # project is on Spark. The client package is the same either way; only the
+  # endpoint changes, which is one line in main.dart.
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.3
+  cloud_firestore: ^5.5.0
+  cloud_functions: ^5.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

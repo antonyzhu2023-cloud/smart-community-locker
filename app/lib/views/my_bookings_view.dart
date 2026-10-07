@@ -3,10 +3,13 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/reservation.dart';
+import '../repositories/access_token_repository.dart';
 import '../repositories/booking_repository.dart';
 import '../viewmodels/auth_view_model.dart';
 import '../viewmodels/my_bookings_view_model.dart';
+import 'access_view.dart';
 import 'booking_view.dart' show purposeLabel;
+import 'handover_view.dart';
 
 /// The user's own bookings, with cancel and extend (FR3).
 class MyBookingsView extends StatefulWidget {
@@ -18,6 +21,7 @@ class MyBookingsView extends StatefulWidget {
         create: (context) => MyBookingsViewModel(
           context.read<BookingRepository>(),
           context.read<AuthViewModel>().user?.id ?? '',
+          tokens: context.read<AccessTokenRepository>(),
         ),
         child: const MyBookingsView(),
       ),
@@ -73,6 +77,10 @@ class _MyBookingsViewState extends State<MyBookingsView> {
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
               child: _ErrorBanner(message: vm.error!, onDismiss: vm.clearError),
             ),
+          if (vm.hasShared) ...[
+            const _SectionHeader('Shared with you'),
+            for (final shared in vm.sharedWithMe) _SharedTile(shared: shared),
+          ],
           if (active.isNotEmpty) ...[
             const _SectionHeader('Active'),
             for (final booking in active)
@@ -125,19 +133,21 @@ class _BookingTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              live ? 'Until $until' : 'Ended $until',
-              style: theme.textTheme.bodyMedium,
-            ),
+            Text(_whenLabel(until), style: theme.textTheme.bodyMedium),
             Text(
               '${booking.stationId} · ${purposeLabel(booking.purpose)}',
               style: theme.textTheme.bodySmall,
             ),
             if (live)
+              // A Wrap rather than a Row. Four actions do not fit on one line
+              // on a compact screen, and a Row would overflow rather than move
+              // one of them down.
+              //
               // Only one row is disabled while its own change is in flight,
               // rather than the whole list.
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 4,
                 children: [
                   if (busy)
                     const Padding(
@@ -158,6 +168,17 @@ class _BookingTile extends StatelessWidget {
                       onPressed: () => _confirmCancel(context),
                       child: const Text('Cancel'),
                     ),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.of(context)
+                              .push(HandoverView.route(booking)),
+                      child: const Text('Give to a neighbour'),
+                    ),
+                    FilledButton(
+                      onPressed: () =>
+                          Navigator.of(context).push(AccessView.route(booking)),
+                      child: const Text('Open'),
+                    ),
                   ],
                 ],
               )
@@ -168,6 +189,19 @@ class _BookingTile extends StatelessWidget {
       ),
     );
   }
+
+  /// What the booked end time means now, which depends on the state.
+  ///
+  /// A cancelled booking never reached its end time, so labelling that time
+  /// "Ended" states something that did not happen. The booking was given up
+  /// before it got there, and the time is only the window it would have had.
+  String _whenLabel(String until) => switch (booking.state) {
+    ReservationState.cancelled => 'Cancelled. Was booked until $until',
+    ReservationState.expired => 'Expired without being opened, $until',
+    ReservationState.completed => 'Finished $until',
+    ReservationState.overdue => 'Was due back $until',
+    _ => 'Until $until',
+  };
 
   Future<void> _confirmCancel(BuildContext context) async {
     // Cancelling frees the compartment for someone else and cannot be undone,
@@ -194,6 +228,71 @@ class _BookingTile extends StatelessWidget {
     );
 
     if (confirmed ?? false) await vm.cancel(booking.id);
+  }
+}
+
+/// A booking a neighbour has given this user one code for (FR7).
+///
+/// It is not their booking, so there is no Cancel, no Extend and no way to
+/// pass it on again. The only thing they can do is open the locker, once.
+class _SharedTile extends StatelessWidget {
+  const _SharedTile({required this.shared});
+
+  final SharedBooking shared;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final booking = shared.booking;
+    final until = DateFormat('EEE d MMM, HH:mm').format(booking.endTime);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: theme.colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Compartment ${booking.compartmentId}',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('Shared', style: theme.textTheme.labelSmall),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('Available until $until', style: theme.textTheme.bodyMedium),
+            Text(
+              'A neighbour gave you one code. It opens the locker once.',
+              style: theme.textTheme.bodySmall,
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: () =>
+                    Navigator.of(context).push(AccessView.route(booking)),
+                child: const Text('Open'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

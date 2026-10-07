@@ -151,7 +151,9 @@ void main() {
     await openBooking(tester);
 
     await tester.tap(find.textContaining('C1'));
-    await tester.tap(find.text('1 days'));
+    // "1 day", not "1 days". Checked here because this label is on the screen
+    // in every demo screenshot of the booking form.
+    await tester.tap(find.text('1 day'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Book this locker'));
     await tester.pumpAndSettle();
