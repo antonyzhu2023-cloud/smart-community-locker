@@ -1,0 +1,10 @@
+# Build output and dependencies.
+lib/
+node_modules/
+coverage/
+
+# Local secrets. The signing key is a Firebase secret and never lives here.
+.env
+.env.*
+.runtimeconfig.json
+serviceAccountKey.json

@@ -120,3 +120,44 @@ jobs:
         with:
           name: coverage
           path: app/coverage/
+
+  # Deferred from Sprint 0, when functions/ did not exist yet and this job
+  # failed the whole workflow by pointing at a missing directory.
+  functions:
+    name: Cloud Functions
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - run: npm ci
+
+      # Type checking is the static analysis step on this side, and the
+      # tsconfig is strict: no implicit any, no unused locals, no fallthrough.
+      - name: Type check
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # The access rules exist twice, once in Dart and once in TypeScript,
+      # because the app and the backend are in different languages and cannot
+      # share a module. Both are run against the same table of cases. If one
+      # side drifts, this is where it shows.
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: functions-coverage
+          path: functions/coverage/

@@ -1,0 +1,30 @@
+{
+  "name": "scls-functions",
+  "version": "1.0.0",
+  "description": "Cloud Functions for the Smart Community Locker System. Two functions: issueAccessToken (FR4) and handleScan (FR5).",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "comment:engines": "Firebase reads this field to pick the runtime. Set to 22 to match the development machine and the CI runner, so the three agree. The functions are not deployed on this project, so the field only decides what the emulator runs.",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "serve": "npm run build && firebase emulators:start --only functions"
+  },
+  "comment:firebase-admin": "Pinned to 13 on purpose, 8 October. Version 12 pulled in a high-severity node-forge advisory, an RSA PKCS#1 v1.5 signature verification flaw. Version 13 removes it and stays inside the peer range firebase-functions 6.6.0 declares, which is ^11.10 || ^12 || ^13. Version 14 clears more advisories but falls outside that range, so npm installs it only by overriding the peer dependency. Nine moderate uuid advisories remain under @google-cloud/*, with no fix that keeps a supported combination. Do not move to 14 without rechecking the peer range.",
+  "dependencies": {
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.17.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.6.3"
+  }
+}
