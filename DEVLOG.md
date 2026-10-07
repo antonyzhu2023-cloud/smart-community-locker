@@ -205,7 +205,51 @@ not discover it.
 
 ## Sprint 2 — FR4/FR5 access slice, FR7 hand-over
 
-_(entries)_
+### 2026-10-07 — the access slice, and a clock in two places
+
+FR4 and FR5. `AccessPolicy` holds the rules as a pure class with no IO, so the four
+refusals evaluation criterion E4 names are four calls to one method. `LockerCommandGateway`
+is the seam Milestone 1 named as critical, and it has no `open(compartmentId)` method
+because the application never opens a locker. It presents a credential and the server
+decides.
+
+Seven tests failed on the first run of the access screen, all from one cause. The backend
+minted tokens using the real clock while the ViewModel judged them against an injected
+fake one, so every token looked expired the instant it was issued. The dependency
+injection had been done halfway. A system with two sources of time will eventually have
+two opinions about what time it is. The clock is now injected all the way down.
+
+A second failure was different in kind. A test asserted that an accepted code with no door
+report yet counts as waiting, and it could not pass, because the in-memory cabinet answered
+in the same instant it was asked. The state being asserted had a duration of zero. Added
+`doorReportDelay` so the cabinet takes time to reply, which is also closer to a real one.
+The demo build uses three seconds so the state can be read in a screenshot, and any figure
+showing it has to say so.
+
+### 2026-10-07 — FR7, and four words that were in the requirement but not in the code
+
+Hand-over. The booking does not change hands: the owner keeps it and keeps their own
+access, and the neighbour gets one token for the same booking. One booking, two accounts,
+two tokens, each revocable on its own. That shape was already in the Milestone 1 credential
+design, which said a booking could hold several tokens.
+
+The test suite found a real defect. FR7 says a hand-over is "revocable **before use**".
+`revoke()` checked only that the token existed, so revoking a spent token succeeded. The
+operation is harmless, because a used code cannot open anything anyway. The message is not:
+the owner taps "Take back", reads "That access has been taken back", and believes the
+locker was never opened. It had been.
+
+Four words in the requirement never reached the code. It was caught because the test was
+written from the requirement text rather than from the implementation, which is the only
+order in which a test can find something the implementer did not already know.
+
+Adding the new dependency to `MyBookingsView` broke twelve unrelated view tests at once.
+That was the design working. The dependency is visible, so adding one has a cost that is
+paid in the open. Milestone 1 rejected the Singleton pattern for this reason, and the
+twelve failures are the bill for that decision rather than evidence against it.
+
+One limitation to carry into section 5: all state is in memory. Restarting the app clears
+every account, booking and token, so the hand-over demo has to be run in a single sitting.
 
 ---
 
