@@ -69,10 +69,13 @@ jobs:
       # on the runner rejects the generated file in strict mode.
       - name: Check the coverage exclusion list is still real
         run: |
+          # Paths are relative to app/, because this job sets
+          # working-directory there. Writing them from the repository root is
+          # how this check failed on its first run.
           for f in \
-            app/lib/repositories/firebase/firebase_bootstrap.dart \
-            app/lib/repositories/firebase/functions_access_backend.dart \
-            app/lib/repositories/firebase/mirrored_repositories.dart
+            lib/repositories/firebase/firebase_bootstrap.dart \
+            lib/repositories/firebase/functions_access_backend.dart \
+            lib/repositories/firebase/mirrored_repositories.dart
           do
             if [ ! -f "$f" ]; then
               echo "FAIL: $f is excluded from the coverage gate but no longer exists."

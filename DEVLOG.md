@@ -422,3 +422,19 @@ The remaining two low spots are `my_bookings_view.dart` at 77.14% and `models` a
 Both are uncovered branches rather than untested files. Left alone deliberately: with six
 days to go, the end-to-end check against the real server and the heuristic walkthrough are
 worth more than four points of coverage.
+
+### 2026-10-17 — the guard against a stale exclusion list was itself broken
+
+Pushed, and the build went red on the step I had added to stop the coverage exclusion list
+going stale. It reported that `firebase_bootstrap.dart` is excluded but no longer exists.
+The file exists. The check writes its paths from the repository root, and the job sets
+`working-directory: app`, so it was looking for `app/app/lib/...`.
+
+A guard that cannot find any of the files it is guarding would fail every build until
+somebody deleted the guard, which is the opposite of what it was for. One line to fix.
+
+Worth recording because of what it is: a check written to prevent an instrument from going
+stale, which had never been run against a case it was supposed to pass. Fifth in the series,
+and the second one in two days that failed because I trusted something I had not exercised.
+
+It failed closed rather than open, which is the only reason this entry is short.
