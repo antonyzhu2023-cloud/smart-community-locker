@@ -438,3 +438,33 @@ stale, which had never been run against a case it was supposed to pass. Fifth in
 and the second one in two days that failed because I trusted something I had not exercised.
 
 It failed closed rather than open, which is the only reason this entry is short.
+
+### 2026-10-17 — a test suite that expired overnight
+
+Pushed the fix for the guard. The build went red again, and this time all sixteen tests in
+`access_view_test.dart` failed, including ones that assert nothing about time. Everything
+still passed on my machine yesterday. The handover tests, written the same afternoon, passed
+on CI.
+
+The setUp hard-coded `fakeNow = DateTime.utc(2026, 10, 16, 12)` and booked a compartment
+ending two hours later. `InMemoryBookingRepository.book()` validates the end time against
+the **real** clock and refuses anything in the past. On 16 October that booking was two
+hours in the future. On 17 October it was twenty-two hours in the past, so setUp threw and
+every test in the file died before its first assertion.
+
+I wrote a test suite with an expiry date.
+
+What makes this worth recording is that it is the same defect as 7 October, when the
+ViewModel and the backend each had their own clock and every token looked expired the
+instant it was issued. I fixed that by injecting the clock all the way down. Here I injected
+the clock into the ViewModel and the backend and *not* into the booking repository, so the
+file had two sources of time again. Partial injection is worse than none: it looks finished.
+
+The general shape is that a dependency you inject in most places is a dependency you will
+assume is injected everywhere. The fix is one line, `DateTime.now().toUtc()`, and the real
+fix is to notice that "the clock" is a dependency like any other and that `DateTime.now()`
+anywhere in production code is a seam somebody will trip over.
+
+Also worth noting how this was caught. The suite was green locally when I wrote it and green
+on CI when I pushed it. It only turned red because the build ran on a different day. No
+amount of running it on 16 October would have found it.

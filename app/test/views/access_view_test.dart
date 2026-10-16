@@ -35,7 +35,15 @@ void main() {
   const owner = 'U-OWNER';
 
   setUp(() async {
-    fakeNow = DateTime.utc(2026, 10, 16, 12);
+    // Anchored to the real clock, not to a fixed date.
+    //
+    // This was `DateTime.utc(2026, 10, 16, 12)` and every test in this file
+    // passed on the day it was written and failed on the next one. The booking
+    // repository validates the end time against the real clock, so a booking
+    // two hours after a hard-coded yesterday is a booking in the past, and
+    // setUp threw before any assertion ran. The fake clock is still fake: the
+    // tests move it by hand. It just starts from a point that is always valid.
+    fakeNow = DateTime.now().toUtc();
     lockers = InMemoryLockerRepository(
       stations: [
         const LockerStation(
