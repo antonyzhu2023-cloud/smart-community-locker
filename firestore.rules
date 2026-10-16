@@ -1,0 +1,76 @@
+rules_version = '2';
+
+// Security rules for the Smart Community Locker System.
+//
+// Milestone 1 specified six backend services. Milestone 2 cut that to two Cloud
+// Functions and sent everything else straight to Firestore, which only works if
+// the rules do the job the removed services were going to do. These rules are
+// that job.
+//
+// The rule that decides everything else: a client may never write anything the
+// access decision depends on. Tokens are created by the server, and their
+// `used` flag is set by the server. A client that could mark a token unused
+// could replay it, and evaluation criterion E4 would be meaningless.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // The map from the app's own user id to the Firebase uid.
+    //
+    // Readable by any signed-in user, because handing a booking to a neighbour
+    // means looking up an account that is not your own. It holds no secret: an
+    // email address and a display name that the hand-over screen already shows.
+    match /users/{appUserId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource.data.uid == request.auth.uid;
+    }
+
+    // Bookings. A user may create and update their own.
+    //
+    // The owner is pinned to the caller on create, so a booking cannot be
+    // written on somebody else's behalf. Deleting is not allowed at all:
+    // cancelling sets a state, and a booking that vanishes takes its audit
+    // trail with it.
+    match /reservations/{reservationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId;
+      allow delete: if false;
+    }
+
+    // Access tokens. Created only by the server, which holds the signing key.
+    //
+    // A client may read them, so the owner can see what is outstanding, and may
+    // delete one to withdraw a hand-over before it is used. It may never create
+    // one and never update one, which is what stops a used token being marked
+    // unused.
+    match /accessTokens/{tokenId} {
+      allow read: if request.auth != null;
+      allow create, update: if false;
+      allow delete: if request.auth != null
+                    && resource.data.used == false
+                    && resource.data.issuedBy == request.auth.uid;
+    }
+
+    // The backup PINs. Only hashes are stored, and nothing may read them.
+    // The cabinet caches the hash out of band, which is what makes the offline
+    // path in QR4 work with no network at all.
+    match /reservationPins/{reservationId} {
+      allow read, write: if false;
+    }
+
+    // The audit trail. QR5 requires every open to be logged and E4 requires
+    // every refusal to be logged. Written by the server only, and never
+    // readable or editable by a client: a log the subject can edit is not a log.
+    match /accessLog/{entryId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

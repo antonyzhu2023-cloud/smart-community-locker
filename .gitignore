@@ -4,6 +4,7 @@ app/lib/firebase_options.dart
 app/android/app/google-services.json
 app/ios/Runner/GoogleService-Info.plist
 functions/.env
+functions/.secret.local
 functions/serviceAccountKey.json
 *.keystore
 *.jks

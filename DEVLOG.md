@@ -251,8 +251,174 @@ twelve failures are the bill for that decision rather than evidence against it.
 One limitation to carry into section 5: all state is in memory. Restarting the app clears
 every account, booking and token, so the hand-over demo has to be run in a single sitting.
 
+### 2026-10-08 — the rules in a second language, and a dependency decision
+
+Wrote the two Cloud Functions in TypeScript: `issueAccessToken` and `handleScan`. The
+access rules now exist twice, once in Dart and once in TypeScript, because the two cannot
+share a module. The server copy is the authority. The Dart copy exists so the app can show
+a countdown without asking the server what time it is.
+
+Both sides are tested against the same table of cases. That is the only thing keeping them
+in step, so the table is the real artefact here, not either implementation.
+
+One bug came straight out of building it twice. Node strips the `=` padding from base64url
+and Dart keeps it, so the two produced different strings for identical claims. A token
+signed by one would have failed verification by the other. Found by diffing the two
+outputs, not by either suite, because each suite was internally consistent.
+
+Ran `npm audit` on the functions. 43 advisories across the whole tree. With `--omit=dev` it
+is nine, seven moderate and two high, so the default number overstates the production risk
+by nearly five times. All nine are transitive dependencies of `firebase-admin` 12.7.0.
+
+`npm audit fix` without `--force` resolved none of them. Every advisory needed a breaking
+version change. Measured three versions against two criteria, peer range and production
+advisories, and chose 13: it clears both high-severity advisories and stays inside the
+range `firebase-functions` declares. Version 14 has fewer advisories but sits outside that
+range, so npm installs it only by overriding the peer dependency, which also risks
+`npm ci` failing on the build server. The cleanest scan result was not the right choice.
+The reason is written into `functions/package.json` so a later upgrade does not undo it by
+accident.
+
+I predicted zero production advisories before running it and was wrong. Worth recording,
+because the prediction is the reason a scan nearly did not get run at all.
+
+CI now has two jobs in two languages in one workflow. Seven runs, all green.
+
 ---
 
 ## Evaluation and report
 
-_(entries)_
+### 2026-10-11 — the report draft, and the word limit
+
+Wrote all five sections and measured: 5,868 prose words against a 4,000 limit including
+references. Cut it to 3,984.
+
+Two things made the cut possible without losing content. The six tables were rendered as
+images, which is the technique Milestone 1 used and the lecturer's own exemplars use, so
+their text does not count. The rest came out of sentences that said the same thing twice.
+Section 5 was repeating Section 3 almost verbatim, which is what happens when a conclusion
+is written from the body rather than from the work.
+
+The first table images were wrong and nearly shipped. Matplotlib wrapped the text by
+character count rather than by measured width, so the right-hand column was clipped and the
+longest reason in Table 2 was unreadable. It looked fine at thumbnail size in the markdown
+preview and only showed up after rendering the .docx to PDF and actually looking at a page.
+Rebuilt the renderer to wrap on measured pixel width. Same failure shape as the coverage
+gate: a tool that was trusted and never checked against its own output.
+
+A figure caption was wrong too. It described `ci-two-jobs.png` as the run list, when the
+screenshot had been retaken as the two-job view of a single run. Caught by reading the
+rendered page, not by reading the markdown.
+
+### 2026-10-14 — README and this file
+
+Brought the README into line with what the repository actually does. The feature table
+still said "in progress" for the five features that were finished. Worse, the install steps
+told a marker to configure Firebase, deploy functions and start an MQTT broker, none of
+which is needed, and none of which would have produced the running demo. Somebody following
+that README would have concluded the project did not build.
+
+That is the same defect class as the four wording defects from Sprint 1 and 2: every
+individual statement was true when it was written, and the whole was wrong once the thing
+it described had moved. Documentation goes stale in exactly the way a hand-written coverage
+gate scope goes stale.
+
+Rewrote it around what the prototype really is: clone, `flutter pub get`, `flutter run`, no
+backend needed. Moved Firebase and MQTT to an optional section. Added the four seeded
+membership codes, because a marker who cannot get past the registration screen cannot mark
+Section 2.
+
+Remaining before submission: the Nielsen walkthrough, a Test Lab run for E7, and informal
+feedback from three to five people.
+
+### 2026-10-16 — the lecturer read the draft as having no backend, and he was nearly right
+
+Draft feedback. The sentence that mattered: "the features are mainly front end without
+backend". There are two Cloud Functions with 47 Jest tests, so on the face of it that is
+wrong. It is not wrong. Nothing in the running application ever called them. The app made
+its own access decisions in `InMemoryAccessBackend`, which is a class pretending to be a
+server, and the report leaned three times on a claim that swapping a data source touches one
+file without ever having done it.
+
+So E4 was being evidenced against a stand-in. "Only the server may validate a code" is the
+central security claim of this design, and a stand-in that lives in the same process as the
+caller cannot evidence it at all. A reader who only had the artefacts was right to say so.
+
+Wired it up. Harder than expected for a reason I did not see coming: `issueAccessToken`
+begins with `request.auth?.uid` and then reads `reservations/{id}` from Firestore. Neither
+existed, because accounts and bookings were in memory. Wiring "just the access path" is not
+a thing. The access path has a shape and the shape includes an identity and a booking
+record.
+
+Rather than rewrite the auth and booking repositories three days before a deadline, wrapped
+them. `MirroredAuthRepository` and `MirroredBookingRepository` forward every call to the
+in-memory implementation and then copy the result where the functions can read it. The
+wrapped classes did not change and neither did any of their tests. That is the Decorator
+pattern doing the thing it is for, and it was only available because everything depends on
+the interfaces rather than on the concrete classes. Milestone 1 argued for that seam on
+testability grounds. This is the second return on it and it is a bigger one.
+
+The cost is honest and worth writing down: the same data now exists twice and the two writes
+are not transactional. A failed mirror write leaves a booking the app can see and the server
+cannot. The in-memory side stays authoritative so the app keeps working, but that booking
+cannot produce a code. A full replacement would not have this problem. I chose the smaller
+blast radius over the better design, with seven days left, and that is a trade and not a
+discovery.
+
+Splitting the backend also forced something that should have been separate all along. The
+old class decided *and* actuated. Once deciding moved to a function, the actuating half had
+to become `SimulatedCabinet`. Writing its tests turned up two behaviours that had never been
+tested on their own: that a repeated command is swallowed by token id, and that an open
+reports nothing until the door reports. Both were implemented. Neither was observable while
+they were buried inside a credential check they have nothing to do with. Splitting a class
+along the line the design already drew is how you find out what the class was hiding.
+
+Project id is `demo-scls`. A `demo-` prefix makes the emulators skip all validation, so this
+needs no Firebase account, no API key and no `flutterfire configure`. A marker can run the
+whole thing from a clone. That was worth twenty minutes of reading documentation.
+
+The coverage gate now has one exclusion: three files that do nothing but call Firebase and
+cannot execute without an emulator. I was uneasy about this, having already written a
+section about a gate whose hand-maintained scope went stale. So the exclusion list has a
+build step that fails if any excluded file stops existing. The difference between this and
+the earlier defect is not that one list is better than the other. It is that this one cannot
+rot in silence.
+
+### 2026-10-17 — the coverage figure was two sprints out of date
+
+Ran the awk gate by hand for the first time since Sprint 1 and got 75.10%, not the 94.10%
+I had been quoting. The quoted number was measured before `access_view.dart` and
+`handover_view.dart` existed. It had been in a submitted draft.
+
+The two files between them are 311 lines with one covered line, and no widget tests at all.
+They are the FR4/FR5 screen and the FR7 screen: the access code, the countdown, the waiting
+state, the PIN, and the whole hand-over flow. The two features the report calls the system's
+novelty had no screen-level test, while the report's central argument is that screen-level
+defects are what a test suite misses. Writing that down is uncomfortable and it is the point.
+
+Wrote 29 widget tests. `lib/` went to 91.46%, `access_view` to 95.29%, `handover_view` to
+94.33%, and `lib/views/` as a whole from 55.86% to 91.29%. 378 Dart tests now, 425 with the
+TypeScript side.
+
+Five failed on the first run and three of those failed for the same reason, which is worth
+more than the tests themselves. The default test window is 800x600. The access screen is a
+list, a list does not build children it cannot show, and the PIN panel and the error banner
+sit below the fold. So they were not merely unasserted, they were absent from the widget
+tree, and every finder returned nothing. The assertion was right and the instrument could
+not see the thing being asserted.
+
+That is the fourth time in this project that a measuring instrument reported less than it
+claimed: the path separator in the coverage gate, the gate's hand-maintained scope, the `??`
+in the test helper, and now the test viewport. The difference is that this one failed red.
+The first three all passed green, which is why they survived.
+
+The sixth-form version of the lesson is "test your tools". The version I actually believe
+after this project is narrower and more useful: **a quality instrument should be exercised
+against an input it is supposed to reject before anything is trusted to it.** Every one of
+these four would have been caught in minutes by that habit, and I did not have it, despite
+twenty years of building the instruments for other people.
+
+The remaining two low spots are `my_bookings_view.dart` at 77.14% and `models` at 82.18%.
+Both are uncovered branches rather than untested files. Left alone deliberately: with six
+days to go, the end-to-end check against the real server and the heuristic walkthrough are
+worth more than four points of coverage.

@@ -53,8 +53,35 @@ jobs:
       # reported on its own, and still gated on its own, so the requirement can be
       # evidenced directly.
       #
+      # There is now exactly one exclusion. Three files under
+      # lib/repositories/firebase/ do nothing but call Firebase: they need a
+      # running emulator suite to execute at all, so a unit test of them would be
+      # a test of the Firebase SDK. Excluding them is a different decision from
+      # the stale directory list above, and it is kept from rotting the same way
+      # by the check below: if an excluded file stops existing, the build fails
+      # and somebody has to look at the list. An exclusion nobody is forced to
+      # revisit is how the first gate went wrong.
+      #
+      # The excluded files are covered by the manual end-to-end procedure in
+      # docs/evaluation/, not by nothing.
+      #
       # lcov.info is parsed here rather than with the lcov tool, because lcov 2.x
       # on the runner rejects the generated file in strict mode.
+      - name: Check the coverage exclusion list is still real
+        run: |
+          for f in \
+            app/lib/repositories/firebase/firebase_bootstrap.dart \
+            app/lib/repositories/firebase/functions_access_backend.dart \
+            app/lib/repositories/firebase/mirrored_repositories.dart
+          do
+            if [ ! -f "$f" ]; then
+              echo "FAIL: $f is excluded from the coverage gate but no longer exists."
+              echo "Update the exclusion in this workflow rather than leaving it stale."
+              exit 1
+            fi
+          done
+          echo "PASS: all 3 excluded files still exist"
+
       - name: Coverage gate (lib >= 70%, QR6 layers >= 70%)
         run: |
           awk '
@@ -64,9 +91,14 @@ jobs:
               # slashes on the Linux runner. Normalise so the gate gives the same
               # answer in both places.
               gsub(/\\/, "/", file)
+
+              # The one exclusion. See the note above this step.
+              skip = (file ~ /lib\/repositories\/firebase\/(firebase_bootstrap|functions_access_backend|mirrored_repositories)\.dart$/)
               next
             }
             /^DA:/ {
+              if (skip) next
+
               split(substr($0, 4), a, ",")
               covered = (a[2] + 0 > 0)
 
