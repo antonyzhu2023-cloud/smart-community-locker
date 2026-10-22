@@ -34,10 +34,26 @@ Built for COMP826 Mobile Systems Development, Auckland University of Technology.
 
 ## Screenshots
 
-| Find a locker | Book it | Open it | Hand it to a neighbour |
-|---|---|---|---|
-| ![Station list](docs/screenshots/fr2-station-list.png) | ![Booking](docs/screenshots/fr3-booking-form.png) | ![Access code](docs/screenshots/fr4-qr-code.png) | ![Shared booking](docs/screenshots/fr7-bob-shared.png) |
-| Three seeded stations. An offline station shows no count. | One screen. A receipt replaces the form so it cannot be submitted twice. | A signed code, 120 seconds, works once. | The neighbour's own account. One button, no cancel, no extend. |
+<table>
+<tr>
+<th width="25%">Find a locker</th>
+<th width="25%">Book it</th>
+<th width="25%">Open it</th>
+<th width="25%">Hand it to a neighbour</th>
+</tr>
+<tr>
+<td><img src="docs/screenshots/fr2-station-list.png" alt="Station list" width="220"></td>
+<td><img src="docs/screenshots/fr3-booking-form.png" alt="Booking" width="220"></td>
+<td><img src="docs/screenshots/fr4-qr-code.png" alt="Access code" width="220"></td>
+<td><img src="docs/screenshots/fr7-bob-shared.png" alt="Shared booking" width="220"></td>
+</tr>
+<tr>
+<td>Three seeded stations. An offline station shows no count.</td>
+<td>One screen. A receipt replaces the form so it cannot be submitted twice.</td>
+<td>A signed code, 120 seconds, works once.</td>
+<td>The neighbour's own account. One button, no cancel, no extend.</td>
+</tr>
+</table>
 
 More screens, including the waiting and door-open states and the offline PIN,
 are in [`docs/screenshots/`](docs/screenshots).
