@@ -1,5 +1,10 @@
 # Smart Community Locker System (SCLS)
 
+[![CI](https://github.com/antonyzhu2023-cloud/smart-community-locker/actions/workflows/ci.yml/badge.svg)](https://github.com/antonyzhu2023-cloud/smart-community-locker/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-91.46%25-brightgreen)](#running-the-tests)
+[![Tests](https://img.shields.io/badge/tests-425-blue)](#running-the-tests)
+[![Platform](https://img.shields.io/badge/platform-Android-lightgrey)](#compiling-and-running-the-project)
+
 A mobile app for booking and opening **shared lockers in a community**, such as an
 apartment building or a university campus. Unlike carrier-operated parcel lockers, SCLS is
 not owned by one courier, lets a resident **book a compartment in advance**, and lets them
@@ -10,6 +15,32 @@ Built for COMP826 Mobile Systems Development, Auckland University of Technology.
 
 > **Status:** Milestone 2 prototype. Five of the nine requirements are built. The rest are
 > declared in [Feature status](#feature-status) rather than left half-finished.
+
+---
+
+## Contents
+
+- [Screenshots](#screenshots)
+- [Compiling and running the project](#compiling-and-running-the-project)
+- [Running the tests](#running-the-tests)
+- [How it works](#how-it-works)
+- [Architecture](#architecture)
+- [Running it against the real server](#running-it-against-the-real-server)
+- [Feature status](#feature-status)
+- [Repository layout](#repository-layout)
+- [Known limitations](#known-limitations)
+
+---
+
+## Screenshots
+
+| Find a locker | Book it | Open it | Hand it to a neighbour |
+|---|---|---|---|
+| ![Station list](docs/screenshots/fr2-station-list.png) | ![Booking](docs/screenshots/fr3-booking-form.png) | ![Access code](docs/screenshots/fr4-qr-code.png) | ![Shared booking](docs/screenshots/fr7-bob-shared.png) |
+| Three seeded stations. An offline station shows no count. | One screen. A receipt replaces the form so it cannot be submitted twice. | A signed code, 120 seconds, works once. | The neighbour's own account. One button, no cancel, no extend. |
+
+More screens, including the waiting and door-open states and the offline PIN,
+are in [`docs/screenshots/`](docs/screenshots).
 
 ---
 
@@ -109,6 +140,21 @@ built and injected in [`app/lib/main.dart`](app/lib/main.dart). Swapping them fo
 is a change to that one file, which is the claim Milestone 1 made for the repository layer.
 The Cloud Functions are real TypeScript with their own test suite, and the access rules
 exist in both languages so that the server copy is the authority.
+
+---
+
+## Architecture
+
+![Architecture](docs/diagrams/m2_architecture.png)
+
+MVVM with a repository layer. Screens hold no logic, and every data source sits behind an
+interface, so nothing above knows whether a booking comes from a database or from memory.
+That seam is why the whole opening path has tests without a broker or a cabinet existing,
+and why the Cloud Functions could be connected late without touching a screen.
+
+Pink is new in Milestone 2. `MirroredAuthRepository` and `MirroredBookingRepository` are
+decorators: they forward to the in-memory implementations and then copy the result where
+the functions can read it, so the wrapped classes and their tests were left untouched.
 
 ---
 
@@ -236,3 +282,9 @@ DEVLOG.md            a dated entry per working session
 - The cabinet reply is delayed by three seconds on purpose in this build, so the "waiting
   for the locker" state can be read in a screenshot. A real cabinet answers well inside the
   2 s target in QR3.
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE).
