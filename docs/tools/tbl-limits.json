@@ -1,0 +1,18 @@
+{
+  "widths": [186, 538, 1072],
+  "rows": [
+    ["Kind", "Limitation", "What it means in practice"],
+    ["Technical", "The app's own state is in memory", "Restarting clears every account, booking and code. A demonstration has to be done in one sitting"],
+    ["Technical", "The community membership list lives in the app, not on the server", "Accounts persist and the list that decides who may hold one does not. FR1's eligibility check was never moved to a function, so the two halves of registration are stored in different places"],
+    ["Technical", "Accounts and bookings are mirrored to the server, not moved there", "The same record is written twice and the two writes are not atomic. A failed mirror leaves a booking the app shows and the server cannot see, so that booking silently cannot produce a code"],
+    ["Technical", "Cloud functions run in the emulator, not deployed", "Cold starts, region latency, secret rotation and deploy-time failures are all untested. These are exactly the failures that only appear in production"],
+    ["Technical", "No physical cabinet, Android only, on an emulator", "The messaging contract, signing, expiry and duplicate handling are real; the actuator is not. No valid timing, frame-rate or battery figures. iOS needs macOS and a paid developer account"],
+    ["Process", "One developer, no reviewer", "Every design decision was reviewed by the person who made it. The hand-over defect survived because the only person exercising the feature was the person who specified it"],
+    ["Process", "Three one-week sprints compressed into 23 days", "No gap between building a feature and returning to it. Three of the four wording defects were found by reading screenshots, not by use"],
+    ["Process", "The environment cost more than planned, twice", "Seven faults blocked the end-to-end run: a stale emulator process, a JDK not on the path, a mistyped secret filename, orphaned ports. The same shape as the five in Sprint 0, after a paragraph had already been written about them"],
+    ["Evaluation", "The interface blocks the paths the server is designed to refuse", "Three of twelve end-to-end steps could not be run through the app at all. Server refusals are covered by unit tests in both languages, not end to end"],
+    ["Evaluation", "The stand-in backend cannot refuse a credential as not the presenter's", "With no signed-in caller it infers the presenter from the credential it is shown, so the ownership rule holds there by construction. This is why the hand-over defect survived 425 tests, and the same blind spot covers every identity rule"],
+    ["Evaluation", "One evaluator, who is also the developer", "A single inspector finds roughly a third of what five would, and an author scores their own work generously"],
+    ["Evaluation", "Coverage measures execution, not correctness", "91% of lines ran at least once. The hand-over defect was in lines that ran"]
+  ]
+}

@@ -206,7 +206,16 @@ void main() {
       final vm = await loaded();
       await vm.findNeighbour('neighbour@example.com');
       await vm.handOver();
-      final theirs = (await backend.delegationsTo(neighbourId)).single;
+
+      // The hand-over is a permission, not a code. The neighbour exchanges it
+      // for a code of their own when they reach the locker, which is what lets
+      // the credential be fresh at the moment it is used. This test presented
+      // the hand-over itself until 24 October, which is how the gap stayed
+      // hidden: the neighbour's real path was never exercised.
+      final theirs = await backend.issue(
+        reservationId: booking.id,
+        userId: neighbourId,
+      );
 
       expect(
         (await backend.present(
@@ -230,7 +239,13 @@ void main() {
       final vm = await loaded();
       await vm.findNeighbour('neighbour@example.com');
       await vm.handOver();
-      final theirs = (await backend.delegationsTo(neighbourId)).single;
+      // Redeeming the hand-over means minting a code under it. Using that code
+      // closes the hand-over, so the owner's screen stops offering to take
+      // back something that has already been spent.
+      final theirs = await backend.issue(
+        reservationId: booking.id,
+        userId: neighbourId,
+      );
 
       await backend.present(
         stationId: 'ST-1',
@@ -341,14 +356,21 @@ void main() {
       final vm = await loaded();
       await vm.findNeighbour('neighbour@example.com');
       await vm.handOver();
-      final theirs = (await backend.delegationsTo(neighbourId)).single;
+      final grant = (await backend.delegationsTo(neighbourId)).single;
+
+      // The neighbour redeems the grant and opens the locker, which spends
+      // the hand-over.
+      final theirs = await backend.issue(
+        reservationId: booking.id,
+        userId: neighbourId,
+      );
       await backend.present(
         stationId: 'ST-1',
         compartmentId: 'C1',
         payload: theirs.signedPayload,
       );
 
-      expect(await vm.takeBack(theirs.id), isFalse);
+      expect(await vm.takeBack(grant.id), isFalse);
       // The message has to say it was used. Saying "already withdrawn" would
       // leave the owner thinking the locker was never opened.
       expect(vm.error, contains('already been used'));

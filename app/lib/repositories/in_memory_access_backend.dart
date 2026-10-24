@@ -54,6 +54,13 @@ class InMemoryAccessBackend
   /// configuration, and no key of any kind is shipped in the app.
   static const String developmentSecret = 'scls-development-signing-key';
 
+  /// How long a hand-over stays open.
+  ///
+  /// A grant is not a credential, so this is housekeeping rather than security:
+  /// it stops a forgotten hand-over sitting open forever. Seven days is longer
+  /// than any booking this system allows.
+  static const Duration grantLifetime = Duration(days: 7);
+
   /// The stores this stand-in reads and writes. Public because it is a
   /// development double, and a test that builds one already holds both.
   final InMemoryLockerRepository lockers;
@@ -163,7 +170,29 @@ class InMemoryAccessBackend
         'That booking no longer exists.',
       );
     }
-    if (booking.userId != userId) {
+    // Who may ask for a code: the owner, or somebody the owner handed the
+    // booking to.
+    //
+    // This used to be ownership alone, which meant a neighbour could be given a
+    // locker and then refused when they tried to open it. The end-to-end run on
+    // 24 October found it, against the real server and here, because both
+    // implementations had the same rule and the same gap.
+    //
+    // A hand-over now records a *grant* rather than passing a code across. The
+    // grant does not expire. The neighbour mints their own 120 second code when
+    // they reach the locker, the way the owner does, so the credential exists
+    // from the moment it is about to be used rather than from the moment the
+    // owner decided to share.
+    final owns = booking.userId == userId;
+    final grant = owns ? null : _openGrantFor(booking.id, userId);
+    if (!owns && grant == null) {
+      throw const TokenException(
+        TokenFailure.notYours,
+        'That booking belongs to someone else.',
+      );
+    }
+    // Only the owner may hand the booking on. A delegate cannot re-delegate.
+    if (delegateUserId != null && !owns) {
       throw const TokenException(
         TokenFailure.notYours,
         'That booking belongs to someone else.',
@@ -179,13 +208,18 @@ class InMemoryAccessBackend
 
     final now = _now();
     final id = 'TK${_nextTokenNumber++}';
+    final isGrant = delegateUserId != null;
+    // A grant outlives the moment it was created. A code does not.
+    final expiresAt = isGrant
+        ? now.add(grantLifetime)
+        : now.add(AccessToken.timeToLive);
     final claims = AccessTokenClaims(
       tokenId: id,
       reservationId: booking.id,
       stationId: booking.stationId,
       compartmentId: booking.compartmentId,
       issuedAt: now,
-      expiresAt: now.add(AccessToken.timeToLive),
+      expiresAt: expiresAt,
     );
 
     // The backup PIN belongs to the booking, not to the token: it has to keep
@@ -203,8 +237,14 @@ class InMemoryAccessBackend
       signedPayload: _policy.sign(claims),
       issuedAt: now,
       expiresAt: claims.expiresAt,
-      delegatedTo: delegateUserId,
+      // On a grant, the neighbour it was handed to. On a code minted under a
+      // grant, the neighbour who minted it, so the ownership check accepts the
+      // person the hand-over was for instead of falling back to the booking's
+      // owner. The server records the same thing for the same reason.
+      delegatedTo: delegateUserId ?? (grant != null ? userId : null),
       fallbackPin: _issuedPins[booking.id],
+      isGrant: isGrant,
+      grantId: grant?.id,
     );
 
     _tokens[id] = token;
@@ -254,11 +294,30 @@ class InMemoryAccessBackend
     return List.unmodifiable(mine);
   }
 
+  /// An unspent hand-over of [reservationId] to [userId], or null.
+  ///
+  /// Expiry is deliberately not checked. A grant is a standing permission that
+  /// ends when it is used or taken back, not on a timer. The code minted under
+  /// it is the thing with the 120 second life.
+  AccessToken? _openGrantFor(String reservationId, String userId) {
+    for (final token in _tokens.values) {
+      if (token.reservationId != reservationId) continue;
+      if (token.delegatedTo != userId) continue;
+      if (token.used) continue;
+      if (!token.isGrant) continue;
+      return token;
+    }
+    return null;
+  }
+
   @override
   Future<List<AccessToken>> delegationsTo(String userId) async {
     await _wait();
+    // Grants, not codes. A code the neighbour minted under a grant also carries
+    // their id, and showing it back to them as a second shared booking would be
+    // the same record counted twice.
     final mine = _tokens.values
-        .where((t) => t.delegatedTo == userId && !t.used)
+        .where((t) => t.delegatedTo == userId && t.isGrant && !t.used)
         .toList(growable: false);
     return List.unmodifiable(mine);
   }
@@ -325,6 +384,26 @@ class InMemoryAccessBackend
     final booking = stored == null
         ? null
         : bookings.reservationById(stored.reservationId);
+
+    // A grant is a permission, not a credential. It says the neighbour may open
+    // this booking; it is not the thing they open it with. Refusing it here
+    // keeps the two kinds of record from blurring back together, which is how
+    // the hand-over came to hand out a 120 second code in the first place.
+    if (stored != null && stored.isGrant) {
+      _log(
+        stationId: stationId,
+        compartmentId: compartmentId,
+        tokenId: stored.id,
+        decision: AccessDecision.invalidSignature,
+        at: now,
+      );
+      return OpenOutcome(
+        decision: OpenDecision.invalidSignature,
+        message: AccessDecision.invalidSignature.userMessage,
+        tokenId: stored.id,
+        at: now,
+      );
+    }
 
     final decision = _policy.decide(
       payload: payload,
@@ -440,6 +519,16 @@ class InMemoryAccessBackend
     if (token != null) {
       _tokens[token.id] = token.copyWith(used: true);
       _actedOn.add(token.id);
+
+      // A delegate's code closes the hand-over it was minted under. FR7 gives
+      // the neighbour one opening, so the grant is spent when their code is
+      // accepted, not when it was issued: a code that expired unused must not
+      // cost them the hand-over.
+      final grantId = token.grantId;
+      if (grantId != null) {
+        final grant = _tokens[grantId];
+        if (grant != null) _tokens[grantId] = grant.copyWith(used: true);
+      }
     }
 
     // A booking becomes active at its first successful open, not at its start

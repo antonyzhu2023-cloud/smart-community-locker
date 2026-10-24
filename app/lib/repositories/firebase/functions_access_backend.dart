@@ -196,9 +196,13 @@ class FunctionsAccessBackend
     final uid = await resolveUid(userId);
     if (uid == null) return const [];
 
+    // Grants, not codes. A neighbour's list is the hand-overs they hold, and a
+    // code they minted under one is theirs to use, not something to show back
+    // to them as a second entry.
     final query = await firestore
         .collection('accessTokens')
         .where('delegatedTo', isEqualTo: uid)
+        .where('isGrant', isEqualTo: true)
         .where('used', isEqualTo: false)
         .get();
     return query.docs.map(_tokenFromDoc).toList();
@@ -217,6 +221,8 @@ class FunctionsAccessBackend
       singleUse: data['singleUse'] != false,
       used: data['used'] == true,
       delegatedTo: data['delegatedTo'] as String?,
+      isGrant: data['isGrant'] == true,
+      grantId: data['grantId'] as String?,
     );
   }
 

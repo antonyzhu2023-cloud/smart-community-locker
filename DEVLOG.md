@@ -519,3 +519,62 @@ This is the clearest instance in the project of the thing section 5 already says
 proves the implementation matches the specification. It cannot tell you the specification
 was wrong. Four hundred and twenty-five of them agreed with me that a two-minute code
 handed to an absent person was a sensible design.
+
+## 25 October 2026 — the grant model, and the half of the fix I nearly shipped
+
+I said yesterday I was not fixing this. I changed my mind: the deadline moved to Sunday,
+and a defect in the one feature the report calls its novelty is worth the remaining hours.
+
+**The redesign.** Handing over writes a *grant*: `isGrant: true`, a seven day housekeeping
+limit rather than a security one, closed when it is used or withdrawn. It is a permission,
+not a credential, and `handleScan` refuses it outright if anybody ever presents it.
+`issueAccessToken` now looks for an open grant instead of demanding ownership, so the
+neighbour mints an ordinary 120 second code of their own when they reach the locker. A
+delegate cannot re-delegate. The grant closes when the neighbour's code is **accepted**,
+not when it is issued, so a code that expires unused does not cost them the hand-over.
+
+**The half I nearly shipped.** Server, app, stand-in and 385 tests all green, and the
+neighbour still could not open the door. The minted code went out with `delegatedTo: null`,
+because until now only a hand-over had ever set that field, and `AccessPolicy.belongsTo`
+falls back to "the booking's owner" when a token names nobody. So Bob got a code and was
+then refused as not its owner.
+
+Worth writing down properly, because it is not a typo. The permission question is answered
+twice, in two files, by two different mechanisms: `issueAccessToken` asks "may you have a
+code" and answers it from the grant; `belongsTo` asks "is this code yours" and answers it
+from the token. **The answer to the first was never written down for the second.** Adding
+the grant lookup without also recording its result on the token left the two halves
+disagreeing, and each half was individually correct.
+
+**Why the suite still could not catch it.** `InMemoryAccessBackend._presenterOf()` derives
+the presenter from the token it was handed, because there is no signed-in caller to ask:
+
+```dart
+return token.isDelegated ? token.delegatedTo : booking?.userId;
+```
+
+Whatever `delegatedTo` says, the presenter matches it. The ownership rule is true by
+construction in the stand-in, so no test written against it can fail for this reason. A
+double built to make the code testable made one rule unfalsifiable. I have added an
+assertion on the field itself rather than on the outcome, which is the only form that
+survives the substitution, and listed the blind spot in Table 9.
+
+**Verified end to end**, Chrome build against the functions in the emulator, five
+screenshots in `docs/screenshots/`. The grant lasts 604,800,000 ms, the code 120,000 ms,
+`issuedBy` equals `delegatedTo` on the minted code, which is the whole design in one field:
+Mei gave the permission, Bob asked for the credential. The `accessLog` entry names Bob.
+
+One result I did not plan. A first code expired unused while I was reading Firestore, and
+the grant was still open, so Bob asked for a second and opened the locker with it. That is
+the "accepted, not issued" rule working, and nothing tests it.
+
+Also fixed the environment fault that has now cost me two days across the project: the
+Firebase emulators need a JDK and Windows had none on the path. Android Studio ships one.
+`JAVA_HOME` and the path are now user environment variables, and the procedure in
+`docs/evaluation/end-to-end-backend.md` says so as a prerequisite. A dependency that lives
+only in a terminal somebody once typed into is not a dependency the project has.
+
+Rebuilt Table 7 and Table 9. The renderer for the report's table images had been written
+inside a throwaway sandbox and was gone, which nearly cost a table that did not match its
+neighbours. It is now `docs/tools/render_table.py` with the two specs beside it. Same
+lesson as the JDK, one day apart.

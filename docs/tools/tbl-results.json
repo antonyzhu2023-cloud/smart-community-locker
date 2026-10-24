@@ -1,0 +1,13 @@
+{
+  "widths": [268, 402, 1126],
+  "rows": [
+    ["Criterion", "Result", "What the result means"],
+    ["E1 Access control", "Pass", "An account with no membership code is signed in and has no route to the locker list. Seven tests assert on which screen is reachable, and the rule is enforced again in the booking layer. A test asserting only that booking returns an error would still pass if the screen became reachable, so it is the structural form that is evidenced"],
+    ["E3 Concurrency", "Pass", "Ten overlapping bookings of one compartment give one confirmation and nine refusals, each with an alternative. Ten at two compartments give two confirmations. The second result is the informative one: it separates correct locking from a lock so coarse that the whole building would serialise"],
+    ["E4 Credential replay", "Pass server-side, partly unreachable end to end", "All four replays refused, and the 120 s boundary holds to the second, in both languages. End to end, only the altered-payload case could be exercised: the interface removes the affordance for the other three before the server sees them (section 4.5)"],
+    ["E5 Opening", "Partial", "A replayed code is refused and produces no second door event. The offline PIN opens the locker with the network down and the open is still recorded. No end-to-end latency is claimed, because timing a simulated actuator measures the simulation"],
+    ["E6 Hand-over", "Fail, then pass after a redesign", "The owner hands a booking over, the neighbour sees it, and the owner can withdraw it. Redeeming was refused by the server and by the stand-in, and had never worked in either build. The hand-over was changed from a code to a standing permission and re-run against the server on 25 October: the neighbour mints their own 120 s code on arrival, it opens the locker once, and the permission closes when that code is accepted rather than when it was issued. See section 4.5"],
+    ["E7 Portability", "Partial", "Package size is measured and is within target. The device matrix and cold-start figures need real hardware and are outstanding"],
+    ["E8 Maintainability", "Pass", "91.46% line coverage against a 70% target, measured on the submitted commit. The figure was 75.10% a week earlier, when the access and hand-over screens had no widget tests at all; 29 were added. See the interpretation below"]
+  ]
+}

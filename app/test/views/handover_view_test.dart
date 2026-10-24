@@ -284,12 +284,19 @@ void main() {
       await tester.tap(find.text('Give Tom access'));
       await tester.pumpAndSettle();
 
-      // The neighbour opens the locker with the code they were given.
-      final token = vm.liveHandovers.single;
+      // The neighbour redeems the hand-over for a code of their own and opens
+      // the locker with that. The hand-over itself is a permission and cannot
+      // be presented, which is the distinction the 24 October end-to-end run
+      // showed was missing.
+      final grant = vm.liveHandovers.single;
+      final theirs = await backend.issue(
+        reservationId: grant.reservationId,
+        userId: grant.delegatedTo!,
+      );
       await backend.present(
         stationId: booking.stationId,
         compartmentId: booking.compartmentId,
-        payload: token.signedPayload,
+        payload: theirs.signedPayload,
       );
       await tester.pumpAndSettle();
 

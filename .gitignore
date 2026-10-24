@@ -6,6 +6,13 @@ app/ios/Runner/GoogleService-Info.plist
 functions/.env
 functions/.secret.local
 functions/serviceAccountKey.json
+
+# Emulator run logs. Written into the repository root every time the suite
+# starts, and committed by accident on 24 October.
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
 *.keystore
 *.jks
 

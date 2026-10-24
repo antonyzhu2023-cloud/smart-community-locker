@@ -25,6 +25,23 @@ Mixing them up is the most likely way to lose half an hour.
 Three things have to be running: the virtual phone, the fake server, and the
 app. In that order.
 
+### Once only: Java on the path
+
+The Firebase emulators are Java programs. `firebase emulators:start` fails with
+`Could not spawn 'java -version'` if no JDK is on the path, which says nothing
+about Firebase and is easy to lose an hour to. Android Studio ships one, so
+there is no need to install a second:
+
+```powershell
+$jbr = "C:\Program Files\Android\Android Studio\jbr"
+[Environment]::SetEnvironmentVariable("JAVA_HOME", $jbr, "User")
+$old = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$old;$jbr\bin", "User")
+```
+
+This writes a user environment variable, so it survives a reboot. Open a new
+terminal afterwards: a running process does not see the change. Run it once.
+
 ### Once only: the signing secret and the functions build
 
 ```powershell
@@ -140,7 +157,7 @@ record, and the server receives the same calls either way.
 | 8 | **Not reachable** | A cancelled booking has no buttons |
 | 9 | Pass | Second `accessTokens` document with `delegatedTo` set to the neighbour |
 | 10 | Pass | Document gone, the neighbour's shared booking disappeared |
-| 11 | **Fail** | The neighbour cannot open the locker at all. See below |
+| 11 | **Fail**, re-run 25 October: Pass | The neighbour could not open the locker at all. See below |
 | 12 | Pass | The app reported it could not reach the service and did not crash |
 
 Steps 5, 7 and 8 were each refused by the interface before the server could refuse them.
@@ -179,4 +196,31 @@ decision to reach the locker. **The hand-over issues a short-lived credential to
 who is not there yet.** The requirement needs a standing grant that the neighbour redeems
 for their own code on arrival, which is the model FR4 already uses for the owner.
 
-Recorded as a limitation rather than fixed, with the deadline 35 hours away.
+## The fix, and re-running step 11 on 25 October
+
+A hand-over now writes a **grant**: `isGrant: true`, no useful expiry, closed when it is
+used or withdrawn. It is not a credential and `handleScan` refuses it if it is ever
+presented. The neighbour calls `issueAccessToken` themselves, the function looks for an
+open grant instead of requiring ownership, and mints an ordinary 120 second code under it.
+
+The call was only half of it. The minted code first went out with `delegatedTo: null`,
+because only a hand-over had ever set that field. `AccessPolicy.belongsTo` falls back to
+the booking's owner when a token names nobody, so the neighbour got a code and was then
+refused as not its owner. **The permission check happens twice, in two files, and the
+answer from the first was not being written down for the second.** A code minted under a
+grant now records the neighbour it belongs to.
+
+Re-run on 25 October, with screenshots in `docs/screenshots/`:
+
+| Evidence | What it shows |
+|---|---|
+| `e2e-grant-doc.png` | The grant: `isGrant: true`, `delegatedTo` the neighbour, `expiresAt - issuedAt` exactly 604,800,000 ms |
+| `e2e-handover-redeemed.png` | The neighbour's own code: `isGrant: false`, `grantId` pointing at the grant, `issuedBy` equal to `delegatedTo`, and a 120,000 ms life |
+| `e2e-handover-opened.png` | `used: true` with `usedAt` six seconds after it was issued |
+| `e2e-grant-closed.png` | The grant closed in the same second the code was accepted |
+| `e2e-handover-logged.png` | An `accessLog` entry with `decision: accepted` and `presentedBy` set to the neighbour, not the owner |
+
+One unplanned result is worth keeping. An earlier code under the same grant expired unused
+while the Firestore tab was being read, and that grant was still open: the hand-over closes
+when a code is **accepted**, not when one is issued. Nobody tested for that. It fell out of
+the design because the two records were given separate lifetimes.

@@ -26,6 +26,8 @@ class AccessToken {
     this.used = false,
     this.delegatedTo,
     this.fallbackPin,
+    this.isGrant = false,
+    this.grantId,
   });
 
   /// The standard life of a token. FR4.
@@ -49,6 +51,21 @@ class AccessToken {
   /// Offline backup. The cabinet keeps only a salted hash of this, and only
   /// while the booking is active (QR4).
   final String? fallbackPin;
+
+  /// True when this record is a hand-over rather than a credential.
+  ///
+  /// A grant says "this person may open this booking". It carries no payload
+  /// the neighbour ever sees and it does not expire on a timer: it ends when it
+  /// is used or taken back. The neighbour exchanges it for a code of their own
+  /// on arrival, which is the distinction FR7 needed and did not have.
+  final bool isGrant;
+
+  /// The grant this code was minted under, when a delegate minted it.
+  ///
+  /// Carried so the grant can be closed when the code is accepted rather than
+  /// when it was issued. A code that expires unused must not cost the
+  /// neighbour their hand-over.
+  final String? grantId;
 
   bool get isDelegated => delegatedTo != null;
 
@@ -77,6 +94,8 @@ class AccessToken {
       used: used ?? this.used,
       delegatedTo: delegatedTo ?? this.delegatedTo,
       fallbackPin: fallbackPin,
+      isGrant: isGrant,
+      grantId: grantId,
     );
   }
 

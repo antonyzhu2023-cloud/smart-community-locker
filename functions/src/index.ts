@@ -40,6 +40,15 @@ import {
 initializeApp();
 
 /**
+ * How long a hand-over stays open.
+ *
+ * A grant is not a credential, so this is a housekeeping limit rather than a
+ * security one: it stops a forgotten hand-over sitting open forever. Seven days
+ * is longer than any booking this system allows.
+ */
+const GRANT_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
  * The signing key. Held as a secret so it is never in the repository and never
  * in the application. A key that reaches a phone is a key that has been given
  * away.
@@ -67,11 +76,35 @@ export const issueAccessToken = onCall(
     if (!reservation) {
       throw new HttpsError('not-found', 'That booking no longer exists.');
     }
-    if (reservation.userId !== uid) {
+
+    // Who may ask for a code: the owner, or somebody the owner has handed the
+    // booking to.
+    //
+    // This used to be `reservation.userId !== uid` and nothing else, which
+    // meant a neighbour could be handed a locker and then refused when they
+    // tried to open it. The end-to-end run on 24 October found it. See
+    // docs/evaluation/end-to-end-backend.md.
+    //
+    // The fix is not only that a delegate is now allowed through. It is that a
+    // hand-over now records a *grant* rather than handing over a code. The
+    // grant has no expiry. The neighbour mints their own 120 second code when
+    // they reach the locker, exactly as the owner does, so the credential is
+    // created when it is about to be used rather than when the owner decided
+    // to share. A two minute code given to somebody who is not there yet is
+    // not a credential, it is a countdown.
+    const owns = reservation.userId === uid;
+    const grant = owns ? null : await findOpenGrant(reservationId, uid);
+    if (!owns && !grant) {
       // Same message as a missing booking. Telling a caller that a booking
       // exists but is not theirs is a way to enumerate other people's bookings.
       throw new HttpsError('not-found', 'That booking no longer exists.');
     }
+
+    // Only the owner may hand the booking on. A delegate cannot re-delegate.
+    if (delegateUserId && !owns) {
+      throw new HttpsError('not-found', 'That booking no longer exists.');
+    }
+
     if (!canIssueToken(reservation.state)) {
       throw new HttpsError(
         'failed-precondition',
@@ -88,7 +121,11 @@ export const issueAccessToken = onCall(
     const policy = new AccessPolicy(signingKey.value());
     const now = Date.now();
     const tokenId = randomUUID();
-    const expiresAt = now + TOKEN_TTL_SECONDS * 1000;
+
+    // A grant outlives the moment it was created. A code does not.
+    const expiresAt = delegateUserId
+      ? now + GRANT_TTL_SECONDS * 1000
+      : now + TOKEN_TTL_SECONDS * 1000;
 
     const payload = policy.sign({
       tid: tokenId,
@@ -105,8 +142,22 @@ export const issueAccessToken = onCall(
       expiresAt,
       singleUse: true,
       used: false,
-      delegatedTo: delegateUserId ?? null,
+      // Who this record is for. On a grant that is the neighbour it was handed
+      // to. On a code minted under a grant it is the neighbour who minted it,
+      // because `AccessPolicy.belongsTo` falls back to the booking's owner
+      // otherwise and refuses the very person the hand-over was for. Leaving
+      // this null was the second half of the 24 October defect: the neighbour
+      // could get a code and still not open the door with it.
+      delegatedTo: delegateUserId ?? (grant ? uid : null),
+      // A grant is a standing permission, not a credential. The neighbour
+      // never sees its payload; they exchange it for a code of their own.
+      isGrant: delegateUserId ? true : false,
       issuedBy: uid,
+      // Set when this code was minted by a delegate under a grant. `handleScan`
+      // reads it to close the grant once the code is actually accepted, which
+      // is what makes a hand-over good for one opening rather than for the
+      // life of the booking.
+      grantId: grant?.id ?? null,
       createdAt: FieldValue.serverTimestamp(),
     });
 
@@ -147,13 +198,24 @@ export const handleScan = onCall(
       ? await loadReservation(storedToken.reservationId)
       : null;
 
-    const decision = policy.decide({
-      payload,
-      now,
-      storedToken,
-      reservation,
-      presentedBy: uid,
-    });
+    // A grant is a permission, not a credential. It says the neighbour may open
+    // this booking; it is not the thing they open it with. Refusing it here
+    // keeps the two kinds of record from blurring back together, which is how
+    // the hand-over came to hand out a 120 second code in the first place.
+    const isGrant = storedToken
+      ? (await db.collection('accessTokens').doc(storedToken.id).get()).data()
+          ?.isGrant === true
+      : false;
+
+    const decision = isGrant
+      ? 'invalidSignature'
+      : policy.decide({
+          payload,
+          now,
+          storedToken,
+          reservation,
+          presentedBy: uid,
+        });
 
     // Every attempt is written down, accepted or not. E4 asks for the refusals
     // to be logged as well as refused, and QR5 asks for every open to be
@@ -180,6 +242,18 @@ export const handleScan = onCall(
       used: true,
       usedAt: FieldValue.serverTimestamp(),
     });
+
+    // If this code was minted by a delegate, the hand-over is now spent. FR7
+    // says a neighbour gets one opening, so the grant closes when their code
+    // is accepted, not when it was issued: a code that expired unused must not
+    // cost them the hand-over.
+    const grantId = await loadGrantIdFor(storedToken!.id);
+    if (grantId) {
+      await db.collection('accessTokens').doc(grantId).update({
+        used: true,
+        usedAt: FieldValue.serverTimestamp(),
+      });
+    }
     if (reservation!.state === 'confirmed') {
       await db
         .collection('reservations')
@@ -231,6 +305,35 @@ async function loadToken(id: string): Promise<StoredToken | null> {
     used: data.used === true,
     delegatedTo: data.delegatedTo ?? null,
   };
+}
+
+/** The grant id a delegate's code was minted under, if it was. */
+async function loadGrantIdFor(tokenId: string): Promise<string | null> {
+  const snapshot = await db.collection('accessTokens').doc(tokenId).get();
+  return (snapshot.data()?.grantId as string | undefined) ?? null;
+}
+
+/**
+ * An unspent hand-over of [reservationId] to [uid], or null.
+ *
+ * Expiry is deliberately not checked. A grant is a standing permission that
+ * ends when it is used or taken back, not on a timer. The code the delegate
+ * mints under it is the thing with the 120 second life.
+ */
+async function findOpenGrant(
+  reservationId: string,
+  uid: string,
+): Promise<{ id: string } | null> {
+  const query = await db
+    .collection('accessTokens')
+    .where('reservationId', '==', reservationId)
+    .where('delegatedTo', '==', uid)
+    .where('isGrant', '==', true)
+    .where('used', '==', false)
+    .limit(1)
+    .get();
+  const doc = query.docs[0];
+  return doc ? { id: doc.id } : null;
 }
 
 /**

@@ -646,28 +646,134 @@ void main() {
       );
     });
 
-    test('a delegated token opens the locker once, then is spent', () async {
+    test('the neighbour mints their own code and opens once', () async {
       final booking = await book();
-      final token = await backend.issueDelegated(
+      await backend.issueDelegated(
         reservationId: booking.id,
         userId: owner,
         delegateUserId: 'U-NEIGHBOUR',
       );
 
-      expect((await presentToken(token.signedPayload)).accepted, isTrue);
-      expect((await presentToken(token.signedPayload)).accepted, isFalse);
+      // The neighbour asks for a code of their own when they reach the locker.
+      // Before 24 October this threw: the server checked ownership and nothing
+      // else, so a hand-over could be given and never redeemed.
+      final theirs = await backend.issue(
+        reservationId: booking.id,
+        userId: 'U-NEIGHBOUR',
+      );
+
+      expect(theirs.isGrant, isFalse);
+      // The code has to say whose it is. `AccessPolicy` asks whether the
+      // presenter owns the booking unless the token names somebody else, so a
+      // code minted by a neighbour and left unattributed is refused as not
+      // theirs. That was the second half of the 24 October defect, and this
+      // backend could not catch it: with no signed-in caller it infers the
+      // presenter from the token, which makes the token agree with itself.
+      expect(theirs.delegatedTo, 'U-NEIGHBOUR');
+      expect(theirs.grantId, isNotNull);
+
+      expect((await presentToken(theirs.signedPayload)).accepted, isTrue);
+      expect((await presentToken(theirs.signedPayload)).accepted, isFalse);
+    });
+
+    test('the grant outlives the 120 second code', () async {
+      final booking = await book();
+      final grant = await backend.issueDelegated(
+        reservationId: booking.id,
+        userId: owner,
+        delegateUserId: 'U-NEIGHBOUR',
+      );
+
+      // The point of the redesign. A hand-over made now has to still be good
+      // when the neighbour arrives, which is not within two minutes.
+      expect(
+        grant.expiresAt.difference(grant.issuedAt),
+        greaterThan(AccessToken.timeToLive * 10),
+      );
+      expect(grant.isGrant, isTrue);
+    });
+
+    test('a grant cannot be presented as if it were a code', () async {
+      final booking = await book();
+      final grant = await backend.issueDelegated(
+        reservationId: booking.id,
+        userId: owner,
+        delegateUserId: 'U-NEIGHBOUR',
+      );
+
+      // A permission is not a credential. Letting the grant open the door is
+      // how the two blurred together in the first place.
+      expect((await presentToken(grant.signedPayload)).accepted, isFalse);
+    });
+
+    test('using the neighbour code closes the hand-over', () async {
+      final booking = await book();
+      await backend.issueDelegated(
+        reservationId: booking.id,
+        userId: owner,
+        delegateUserId: 'U-NEIGHBOUR',
+      );
+      final theirs = await backend.issue(
+        reservationId: booking.id,
+        userId: 'U-NEIGHBOUR',
+      );
+      await presentToken(theirs.signedPayload);
+
+      // FR7 gives the neighbour one opening, so a second code must be refused.
+      expect(await backend.delegationsTo('U-NEIGHBOUR'), isEmpty);
+      await expectLater(
+        backend.issue(reservationId: booking.id, userId: 'U-NEIGHBOUR'),
+        throwsA(isA<TokenException>()),
+      );
+    });
+
+    test('somebody with no hand-over still cannot ask for a code', () async {
+      final booking = await book();
+
+      await expectLater(
+        backend.issue(reservationId: booking.id, userId: 'U-STRANGER'),
+        throwsA(
+          isA<TokenException>().having(
+            (e) => e.failure,
+            'failure',
+            TokenFailure.notYours,
+          ),
+        ),
+      );
     });
 
     test('a hand-over can be withdrawn before it is used', () async {
       final booking = await book();
-      final token = await backend.issueDelegated(
+      final grant = await backend.issueDelegated(
         reservationId: booking.id,
         userId: owner,
         delegateUserId: 'U-NEIGHBOUR',
       );
-      await backend.revoke(token.id);
+      await backend.revoke(grant.id);
 
-      expect((await presentToken(token.signedPayload)).accepted, isFalse);
+      // Withdrawing removes the permission, so there is nothing left to redeem.
+      await expectLater(
+        backend.issue(reservationId: booking.id, userId: 'U-NEIGHBOUR'),
+        throwsA(isA<TokenException>()),
+      );
+    });
+
+    test('a delegate cannot hand the booking on again', () async {
+      final booking = await book();
+      await backend.issueDelegated(
+        reservationId: booking.id,
+        userId: owner,
+        delegateUserId: 'U-NEIGHBOUR',
+      );
+
+      await expectLater(
+        backend.issueDelegated(
+          reservationId: booking.id,
+          userId: 'U-NEIGHBOUR',
+          delegateUserId: 'U-THIRD-PARTY',
+        ),
+        throwsA(isA<TokenException>()),
+      );
     });
 
     test('withdrawing a hand-over leaves the owner their own access', () async {
