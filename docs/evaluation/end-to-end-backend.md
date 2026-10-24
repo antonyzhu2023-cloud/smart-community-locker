@@ -12,33 +12,72 @@ server rather than a stand-in, which is the thing that was missing.
 
 ## Start the server
 
-Two terminals, both at the repository root.
+### "Emulator" means two different things here
 
-**Terminal 1.** Copy the secret file once, then start the emulators.
+The word appears twice in this procedure and refers to two unrelated programs.
+Mixing them up is the most likely way to lose half an hour.
 
-```bash
-cp functions/.secret.local.example functions/.secret.local
-cd functions && npm install && npm run build && cd ..
+| Name | What it is | Started by |
+|---|---|---|
+| **Android emulator** | A virtual phone. The app runs inside it. | `flutter emulators --launch <name>` |
+| **Firebase Local Emulator Suite** | Fake Auth, Firestore and Cloud Functions running on the development machine. The app talks to it over the network. | `firebase emulators:start` |
+
+Three things have to be running: the virtual phone, the fake server, and the
+app. In that order.
+
+### Once only: the signing secret and the functions build
+
+```powershell
+cd C:\dev\smart-community-locker
+copy functions\.secret.local.example functions\.secret.local
+cd functions
+npm install
+npm run build
+cd ..
+```
+
+Commands are on separate lines on purpose. Windows PowerShell 5.1 does not
+support `&&` between commands.
+
+### Terminal 1: the virtual phone
+
+```powershell
+flutter emulators
+flutter emulators --launch Pixel_7
+```
+
+The first command lists the emulators that exist on this machine. Use whatever
+name it prints; `Pixel_7` is only an example. Wait for the phone to finish
+booting to its home screen before going on.
+
+### Terminal 2: the fake server
+
+```powershell
+cd C:\dev\smart-community-locker
 firebase emulators:start
 ```
 
-Wait for the line listing the Auth, Firestore and Functions ports. The emulator
-UI is at <http://localhost:4000> and is worth keeping open: the Firestore tab
-shows the documents appearing as you go, which is the fastest way to see whether
-the app reached the server at all.
+Wait for the table listing the Auth, Firestore and Functions ports. Leave this
+terminal running; closing it is how check 12 is performed.
 
-No Firebase account is needed. The project id is `demo-scls`, and a project id
-beginning `demo-` is one the emulators treat as never existing.
+Open <http://localhost:4000> in a browser and go to the Firestore tab. Documents
+appear there as the app is used, which is the fastest way to see whether the app
+reached the server at all. Keep it on screen.
 
-**Terminal 2.** Run the app against it.
+No Firebase account is needed. The project id is `demo-scls`, and the emulators
+treat a project id beginning `demo-` as one that does not exist.
 
-```bash
-cd app
+### Terminal 3: the app
+
+```powershell
+cd C:\dev\smart-community-locker\app
 flutter run --dart-define=BACKEND=functions
 ```
 
-Without that flag the app runs on the in-memory stand-in, which is still the
-default and still what the tests use.
+**The flag is not optional.** Without it the app runs on the in-memory
+stand-in, every check below will appear to pass, and none of them will have
+tested the server. If the Firestore tab stays empty while you use the app, the
+flag was missing.
 
 ---
 
@@ -83,19 +122,61 @@ when somebody remembers to run it.
 
 ## Result
 
-Run on: _(date)_
+Run on **24 October 2026**, against the Cloud Functions in the Firebase Local Emulator
+Suite, with the app on a Chrome build. The Android emulator was abandoned after repeated
+failures to start, which cost most of a day and is recorded in `DEVLOG.md`. The client
+platform does not affect this procedure: every piece of evidence below is a server-side
+record, and the server receives the same calls either way.
 
-| # | Result | Note |
+| # | Result | What was seen |
 |---|---|---|
-| 1 | | |
-| 2 | | |
-| 3 | | |
-| 4 | | |
-| 5 | | |
-| 6 | | |
-| 7 | | |
-| 8 | | |
-| 9 | | |
-| 10 | | |
-| 11 | | |
-| 12 | | |
+| 1 | Pass | `users` document created with a uid |
+| 2 | Pass | Second account, different uid |
+| 3 | Pass | `reservations` document with `state: confirmed` and the owner's uid |
+| 4 | Pass | `accessTokens` document, `used: false`, expiry 120 s ahead |
+| 5 | **Not reachable** | The screen removes the open button the moment the code expires |
+| 6 | Pass | Accepted, door reported open about three seconds later |
+| 7 | **Not reachable** | The screen clears the code after a successful open |
+| 8 | **Not reachable** | A cancelled booking has no buttons |
+| 9 | Pass | Second `accessTokens` document with `delegatedTo` set to the neighbour |
+| 10 | Pass | Document gone, the neighbour's shared booking disappeared |
+| 11 | **Fail** | The neighbour cannot open the locker at all. See below |
+| 12 | Pass | The app reported it could not reach the service and did not crash |
+
+Steps 5, 7 and 8 were each refused by the interface before the server could refuse them.
+That is defence in depth working, and it means **a test driven through the interface cannot
+exercise the server's refusal paths at all.** Reaching them needs a direct call to the
+endpoint, which is what was done instead:
+
+```powershell
+$body = '{"data":{"payload":"forged.not.a.real.code","stationId":"S1","compartmentId":"S1-B1"}}'
+Invoke-RestMethod -Uri "http://127.0.0.1:5001/demo-scls/australia-southeast1/handleScan" `
+  -Method Post -ContentType "application/json" -Body $body
+```
+
+The server returned `decision: invalidSignature` and wrote an `accessLog` entry with
+`presentedBy`, `reservationId` and `tokenId` all null. It stopped at the signature and
+looked nothing else up, which is the behaviour E4 asks for.
+
+The other three refusals (expired, already used, booking not openable) are covered
+server-side by `accessPolicy.test.ts` and `access_policy_test.dart`, which check the
+boundary to the second in both languages. They are not covered end to end.
+
+## Step 11: the neighbour cannot open a locker handed to them
+
+Reproduced twice, including once on a fresh booking with a single hand-over, so it is not
+caused by repeating the hand-over.
+
+The neighbour's screen calls `requestToken()`, which asks the server for a **new** code.
+`issueAccessToken` refuses because the caller is not the booking's owner, and returns
+"That booking no longer exists" — the same message a missing booking gets, so the screen
+cannot be used to probe other people's bookings. The in-memory implementation refuses for
+the same reason, so this has never worked in either build.
+
+Fixing the call is not enough. The delegated code is created when the owner presses the
+button and lives for 120 seconds, so the neighbour would have two minutes from the owner's
+decision to reach the locker. **The hand-over issues a short-lived credential to somebody
+who is not there yet.** The requirement needs a standing grant that the neighbour redeems
+for their own code on arrival, which is the model FR4 already uses for the owner.
+
+Recorded as a limitation rather than fixed, with the deadline 35 hours away.

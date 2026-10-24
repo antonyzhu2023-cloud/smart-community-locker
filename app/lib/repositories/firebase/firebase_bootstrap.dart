@@ -55,28 +55,57 @@ class FirebaseBackend {
     defaultValue: '10.0.2.2',
   );
 
+  /// Starts Firebase, or picks up the one that is already running.
+  ///
+  /// Every step here has to tolerate being run twice in one process. A hot
+  /// restart re-runs `main()` while the native side survives, so the second
+  /// run finds an initialised Firebase app, an Auth instance that is already
+  /// pointed at the emulator, and a Firestore instance that has been used and
+  /// therefore refuses to be reconfigured.
+  ///
+  /// The first version of this method assumed a cold start. It threw
+  /// `[core/duplicate-app]` on the first hot restart, before `runApp`, so the
+  /// screen never rendered and the app looked like it had hung. None of the
+  /// 425 automated tests could have found it: they never start Firebase, which
+  /// is the point of the repository seam, and hot restart is not a thing a
+  /// test does.
   static Future<FirebaseBackend> start() async {
-    await Firebase.initializeApp(
-      options: const FirebaseOptions(
-        apiKey: 'demo-key-not-used-by-the-emulator',
-        appId: '1:000000000000:android:0000000000000000',
-        messagingSenderId: '000000000000',
-        projectId: projectId,
-      ),
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: 'demo-key-not-used-by-the-emulator',
+          appId: '1:000000000000:android:0000000000000000',
+          messagingSenderId: '000000000000',
+          projectId: projectId,
+        ),
+      );
+    }
 
     final auth = FirebaseAuth.instance;
     final firestore = FirebaseFirestore.instance;
     final functions = FirebaseFunctions.instanceFor(region: region);
 
     await auth.useAuthEmulator(host, 9099);
-    firestore.useFirestoreEmulator(host, 8080);
     functions.useFunctionsEmulator(host, 5001);
+    _pointFirestoreAtEmulator(firestore);
 
     return FirebaseBackend._(
       auth: auth,
       firestore: firestore,
       functions: functions,
     );
+  }
+
+  /// Firestore refuses to be reconfigured once it has read or written
+  /// anything, which is the state it is in after a hot restart. It is already
+  /// pointed at the emulator by then, so the refusal is not a problem.
+  static void _pointFirestoreAtEmulator(FirebaseFirestore firestore) {
+    try {
+      firestore.useFirestoreEmulator(host, 8080);
+    } on FirebaseException {
+      return;
+    } on StateError {
+      return;
+    }
   }
 }

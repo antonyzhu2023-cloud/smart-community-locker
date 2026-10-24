@@ -468,3 +468,54 @@ anywhere in production code is a seam somebody will trip over.
 Also worth noting how this was caught. The suite was green locally when I wrote it and green
 on CI when I pushed it. It only turned red because the build ran on a different day. No
 amount of running it on 16 October would have found it.
+
+### 2026-10-24 — the end-to-end check found what 425 tests did not
+
+Ran the twelve-step procedure against the Cloud Functions for the first time. Getting there
+cost most of a day and none of it was the code: a stale emulator process holding the AVD, a
+JDK that exists inside Android Studio and is not on the path, a secret file I named
+`.secret.loc` instead of `.secret.local`, orphaned ports after each failed start. Six
+environment faults, all the same shape as the five in Sprint 0, which I had already written
+a paragraph about. Writing the paragraph did not make me budget for it.
+
+Two real defects came out of it.
+
+**One. `FirebaseBackend.start()` was not safe to call twice.** Hot restart re-runs `main()`
+while the native Firebase app survives, so the second run threw `[core/duplicate-app]`
+before `runApp`, and the screen never rendered. It looked like a hang. No test could have
+found this: the suite never starts Firebase, which is the point of the repository seam, and
+hot restart is not something a test does. One-line fix, guarded on `Firebase.apps.isEmpty`.
+
+**Two, and this one matters. A neighbour cannot open a locker that was handed to them.**
+
+Bob opens the shared booking, the screen calls `requestToken()`, which calls
+`tokens.issue()`, which asks the server for a *new* code. `issueAccessToken` refuses,
+because Bob is not the booking's owner. The in-memory stand-in refuses too, for the same
+reason. So this has never worked, in either implementation, since FR7 was written.
+
+Why no test caught it: `handover_view_test.dart` covers the owner's screen, and
+`access_view_model_test.dart` covers the owner asking for a code. Nothing covers the
+neighbour using what they were given. The 29 widget tests I added last week were written
+from the same mental model as the code, so they inherited its blind spot.
+
+The deeper problem is not the missing call. Suppose I fix the screen to use the delegated
+token instead of minting a new one. That token was created when the owner pressed "Give Bob
+access" and it lives for 120 seconds. The neighbour has two minutes from the moment the
+owner decides, to arrive at the locker and open it. **The hand-over issues a credential to
+somebody who is not there yet.** That is a design error in FR7, not a coding slip, and it
+was invisible for as long as the only person exercising the feature was the person who
+designed it.
+
+The right shape is a grant rather than a code: handing over creates a standing permission,
+and the neighbour mints their own short-lived code when they arrive. That is the credential
+model FR4 already uses for the owner. I did not see that the delegate needed the same thing.
+
+Not fixing it. Thirty-five hours to the deadline, and a redesign of the credential model
+plus tests plus a re-run of this procedure does not fit. Reporting it instead, in section 2
+where the claim has to be corrected, in section 4 as the finding, in Table 9 as a
+limitation, and in future work as the fix.
+
+This is the clearest instance in the project of the thing section 5 already says: a test
+proves the implementation matches the specification. It cannot tell you the specification
+was wrong. Four hundred and twenty-five of them agreed with me that a two-minute code
+handed to an absent person was a sensible design.
