@@ -246,7 +246,7 @@ void main() {
       await tester.tap(find.text('Give Tom access'));
       await tester.pumpAndSettle();
 
-      expect(find.text('One code given out'), findsOneWidget);
+      expect(find.text('One neighbour has access'), findsOneWidget);
       expect(find.text('Take back'), findsOneWidget);
       expect(find.text('Nobody else can open this locker.'), findsNothing);
       expect(find.textContaining('Tom Baker can now open'), findsOneWidget);

@@ -74,7 +74,8 @@ class _HandoverViewState extends State<HandoverView> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Your neighbour gets one code. It opens the locker once. '
+                    'Your neighbour gets permission to open this locker once. '
+                    'They ask for their own code when they get there. '
                     'You keep your own access and you can take theirs back '
                     'until they use it.',
                     style: theme.textTheme.bodySmall,
@@ -261,7 +262,10 @@ class _HandoverTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('One code given out', style: theme.textTheme.titleSmall),
+                  Text(
+                    'One neighbour has access',
+                    style: theme.textTheme.titleSmall,
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'Not used yet. Opens the locker once.',

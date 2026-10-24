@@ -231,7 +231,7 @@ class _BookingTile extends StatelessWidget {
   }
 }
 
-/// A booking a neighbour has given this user one code for (FR7).
+/// A booking a neighbour has given this user permission to open once (FR7).
 ///
 /// It is not their booking, so there is no Cancel, no Extend and no way to
 /// pass it on again. The only thing they can do is open the locker, once.
@@ -278,7 +278,8 @@ class _SharedTile extends StatelessWidget {
             const SizedBox(height: 4),
             Text('Available until $until', style: theme.textTheme.bodyMedium),
             Text(
-              'A neighbour gave you one code. It opens the locker once.',
+              'A neighbour gave you access. Ask for a code when you get '
+              'there. It opens the locker once.',
               style: theme.textTheme.bodySmall,
             ),
             Align(
