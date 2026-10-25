@@ -1,8 +1,8 @@
 # Smart Community Locker System (SCLS)
 
 [![CI](https://github.com/antonyzhu2023-cloud/smart-community-locker/actions/workflows/ci.yml/badge.svg)](https://github.com/antonyzhu2023-cloud/smart-community-locker/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-91.46%25-brightgreen)](#running-the-tests)
-[![Tests](https://img.shields.io/badge/tests-425-blue)](#running-the-tests)
+[![Coverage](https://img.shields.io/badge/coverage-91.56%25-brightgreen)](#running-the-tests)
+[![Tests](https://img.shields.io/badge/tests-430-blue)](#running-the-tests)
 [![Platform](https://img.shields.io/badge/platform-Android-lightgrey)](#compiling-and-running-the-project)
 
 A mobile app for booking and opening **shared lockers in a community**, such as an
@@ -118,14 +118,14 @@ npm install
 npm test
 ```
 
-425 cases in total: 378 in Dart, 47 in Jest.
+430 cases in total: 383 in Dart and 47 in Jest.
 
 CI runs both suites on every push, plus `dart format --set-exit-if-changed` and
 `flutter analyze`. The coverage gate measures **the whole of `lib/`** and fails the build
 below 70%. It used to name two directories and skip `lib/views/`, which went stale as soon
 as the views grew real logic. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-Current line coverage is 91.46% across `lib/`, and 92.17% across the viewmodel and
+Current line coverage is 91.56% across `lib/`, and 92.34% across the viewmodel and
 repository layers that QR6 names.
 
 ---

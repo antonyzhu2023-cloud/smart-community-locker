@@ -578,3 +578,17 @@ Rebuilt Table 7 and Table 9. The renderer for the report's table images had been
 inside a throwaway sandbox and was gone, which nearly cost a table that did not match its
 neighbours. It is now `docs/tools/render_table.py` with the two specs beside it. Same
 lesson as the JDK, one day apart.
+
+### Coverage re-measured, 25 October
+
+**91.56%** across `lib/` (1,670 of 1,824 lines), **92.34%** across `viewmodels/` and
+`repositories/` (771 of 835), against a 70% gate. 430 tests, 383 Dart and 47 Jest.
+
+Measured after the wording fix rather than assumed from the figure a week earlier. The
+figure moved by a tenth of a percentage point, which is not interesting. Measuring it
+again is, because the previous draft of this report carried a number two sprints out of
+date and said so in section 4.3. Writing that paragraph does not stop it happening again.
+Re-running the command does.
+
+The three Firebase files are still outside the gate, which the manual procedure in
+`docs/evaluation/end-to-end-backend.md` covers instead.

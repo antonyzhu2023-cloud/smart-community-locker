@@ -1,0 +1,74 @@
+{
+  "widths": [
+    150,
+    250,
+    470,
+    420,
+    510
+  ],
+  "rows": [
+    [
+      "FR",
+      "Status",
+      "Automated evidence",
+      "End-to-end evidence",
+      "What is still uncovered, or why it was not built"
+    ],
+    [
+      "FR1",
+      "Built",
+      "51 tests: auth repository, auth ViewModel, root navigation, user model",
+      "Checks 1 and 2. Two accounts created, each with its own uid",
+      "The membership list is held in the app, not on the server (Table 9)"
+    ],
+    [
+      "FR2",
+      "Reduced to a list",
+      "44 tests: locker repository, station list ViewModel and navigation, station model",
+      "Exercised on the way to check 3",
+      "A map needs a maps key and a billing account. The list shows the same stations and free counts, so booking is unaffected"
+    ],
+    [
+      "FR3",
+      "Built",
+      "92 tests: booking repository, booking and my-bookings ViewModels and screens, reservation model",
+      "Check 3. A reservation written with state confirmed and the owner's uid",
+      "The ten-way race is tested in process, not against Firestore transactions"
+    ],
+    [
+      "FR4, FR5",
+      "Built",
+      "202 tests in two languages: the policy in Dart and TypeScript, the access backend, the access ViewModel and screen, the token model, the cabinet",
+      "Checks 4 and 6. Checks 5, 7 and 8 are unreachable through the interface. The forged payload was reached by calling the endpoint directly",
+      "Expired, spent and closed-booking refusals have no end-to-end evidence. The cabinet is simulated, so no timing is claimed"
+    ],
+    [
+      "FR7",
+      "Built",
+      "36 tests: hand-over ViewModel and screen",
+      "Checks 9 to 11, re-run 25 October: the grant, the neighbour's own code, the opening, and the grant closing",
+      "Verified once, by hand. There is no automated end-to-end run of this path"
+    ],
+    [
+      "FR6",
+      "Not built",
+      "None",
+      "None",
+      "Needs a courier role and a deposit flow. No part of the resident journey depends on it"
+    ],
+    [
+      "FR8",
+      "Not built",
+      "None",
+      "None",
+      "Needs Cloud Messaging and a deployed function to send from. The app shows the same facts on screen, so a resident can see them but is not told"
+    ],
+    [
+      "FR9",
+      "Not built",
+      "None",
+      "None",
+      "The access log is written and the server can query it. What is missing is a screen, not the data"
+    ]
+  ]
+}
